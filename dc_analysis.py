@@ -97,9 +97,60 @@ def dc_events(prices: np.ndarray, delta: float) -> list[DCEvent]:
     return events
 
 
+def dc_log_events(y: np.ndarray, delta: float) -> list[DCEvent]:
+    """Algorithm 2 in the LOG gauge: run on y = ln(p) with ADDITIVE thresholds.
+
+    Identical logic to dc_events(), with ratios replaced by differences. delta is
+    an additive log threshold (delta=0.05 ~ +5.13% / -4.88%: symmetric in log,
+    which is the point).
+
+    WHY THIS IS THE DEFAULT (and dc_events is kept only to reproduce the papers):
+      1. SCALE-COVARIANT. The home-close arm spans e-folds (FINDINGS V4.2: p from
+         1.6e-9 to 6.7e11). A relative overshoot of 1e6 and one of 1e-6 are the
+         same physical move in opposite directions; the log gauge calls them
+         +13.8 and -13.8, which is what you can average. Measured on the
+         n=500/T=100k/sl=0.02 home arm the relative gauge reports <om>/delta =
+         3.3e6 -- unplottable; the log gauge reports ~100.
+      2. SYMMETRIC. A relative down-move is bounded at -1, an up-move is
+         unbounded -- a gauge asymmetry in the MEASUREMENT, in a project built on
+         numeraire covariance. Negligible at delta=1%, material at delta=0.44,
+         which is where our grid reaches (tick-sd = 0.78*tp here).
+
+    It costs nothing where the relative gauge is valid: measured agreement on BM
+    is 0.32% at delta=0.01 and 1.5% at delta=0.05, so the FX results stand.
+
+    NOT A FIX FOR THE RUNAWAY: the 1e6 overshoot is real. On a BM spanning e^24
+    the relative gauge gives <om>/delta = 1.22 vs the log gauge's 1.03 -- mildly
+    inflated, nowhere near 1e6. An overshoot that size needs a monotone ratchet
+    (~14 e-folds with no delta pullback), which BM cannot do. Switching gauge
+    makes the number legible, not smaller.
+    """
+    events: list[DCEvent] = []
+    y_ext = float(y[0]); y_dc = float(y[0]); i_dc = 0
+    mode_up = True
+    for i in range(len(y)):
+        v = float(y[i])
+        if not mode_up:
+            if v < y_ext:
+                y_ext = v
+            elif v - y_ext >= delta:
+                events.append(DCEvent(i, v, +1, abs(y_ext - y_dc), i - i_dc))
+                y_ext = v; y_dc = v; i_dc = i; mode_up = True
+        else:
+            if v > y_ext:
+                y_ext = v
+            elif v - y_ext <= -delta:
+                events.append(DCEvent(i, v, -1, abs(y_ext - y_dc), i - i_dc))
+                y_ext = v; y_dc = v; i_dc = i; mode_up = False
+    return events
+
+
 # ── measurements at one threshold ─────────────────────────────────────────────
-def measure(prices: np.ndarray, delta: float, T: int, min_events: int = 12) -> dict | None:
-    ev = dc_events(prices, delta)
+def measure(prices: np.ndarray, delta: float, T: int, min_events: int = 12,
+            gauge: str = "log") -> dict | None:
+    """gauge="log" (default, scale-covariant) | "relative" (the papers' gauge)."""
+    ev = (dc_log_events(np.log(prices), delta) if gauge == "log"
+          else dc_events(prices, delta))
     if len(ev) < min_events:          # too few DC events at this threshold to average over
         return None
     os = np.array([e.overshoot for e in ev[1:]])       # drop the init artifact
@@ -146,12 +197,14 @@ def fit(x: np.ndarray, y: np.ndarray) -> tuple[float, float, float]:
 # ── driver ────────────────────────────────────────────────────────────────────
 def analyse(prices: np.ndarray, n_deltas: int = 20, n_dts: int = 20,
             delta_lo_mult: float = 8.0, delta_hi_mult: float = 40.0,
-            min_events: int = 12,
+            min_events: int = 12, gauge: str = "log",
             plot_path: str | None = "dc_scaling_laws.png") -> dict:
     prices = np.asarray(prices, float)
     prices = prices[np.isfinite(prices) & (prices > 0)]
     T = len(prices)
-    r1 = np.diff(prices) / prices[:-1]
+    # tick scale, matched to the gauge (the two agree to <1% on small steps)
+    r1 = (np.diff(np.log(prices)) if gauge == "log"
+          else np.diff(prices) / prices[:-1])
     sd = float(np.std(r1[np.isfinite(r1)]))
 
     # Threshold range is set RELATIVE to the feed's own tick volatility. The FX
@@ -174,7 +227,7 @@ def analyse(prices: np.ndarray, n_deltas: int = 20, n_dts: int = 20,
     dts = np.unique(np.round(np.exp(np.linspace(np.log(1), np.log(max(T // 50, 2)),
                                                 n_dts))).astype(int))
 
-    rows = [m for d in deltas if (m := measure(prices, float(d), T, min_events)) is not None]
+    rows = [m for d in deltas if (m := measure(prices, float(d), T, min_events, gauge)) is not None]
     if len(rows) < 3:
         raise SystemExit("too few usable thresholds — feed too short or too smooth")
     D = np.array([r["delta"] for r in rows])
@@ -204,7 +257,7 @@ def analyse(prices: np.ndarray, n_deltas: int = 20, n_dts: int = 20,
     res["sq"] = sq
 
     # ── report ───────────────────────────────────────────────────────────────
-    print(f"feed: {T:,} ticks   tick sd(r) = {sd:.4g}")
+    print(f"feed: {T:,} ticks   tick sd(r) = {sd:.4g}   gauge = {gauge}")
     print(f"delta grid: {D[0]:.4g} .. {D[-1]:.4g}  ({D[0]*100:.2f}% .. {D[-1]*100:.2f}%)\n")
     print(f"{'law':>18} | {'exponent E':>10} {'C':>12} {'adj R2':>8} | {'BM/theory':>9}")
     for k, (E, C, R, th) in res["fits"].items():
@@ -278,4 +331,5 @@ def load_csv(path: str, col: str = "p_int") -> np.ndarray:
 
 if __name__ == "__main__":
     src = sys.argv[1] if len(sys.argv) > 1 else "price_feed.csv"
-    analyse(load_csv(src))
+    g = sys.argv[2] if len(sys.argv) > 2 else "log"   # "log" | "relative"
+    analyse(load_csv(src), gauge=g)
