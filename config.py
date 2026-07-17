@@ -58,7 +58,21 @@ class Config:
                                 # Log grid (not price grid) because p spans e-folds here, and
                                 # round numbers are ~log-spaced in a scale-free market anyway.
     sl_enabled: bool = True         # arm stop-losses (False = TP-limit depth only, the stabiliser)
-    close_mode: str = "quantity"    # what an exit PROMISES (the symmetry fix, v4):
+    tp_sig: int = 0                 # TP clustering (HANDOFF-v4 §6.1, Osler 2003): snap TP limit prices
+                                    # to this many SIGNIFICANT FIGURES (0 = off). Scale-covariant by
+                                    # construction (sig figs are relative), unlike an absolute grid.
+                                    # Clusters the DEPTH onto discrete levels; the space between levels
+                                    # is empty, and a gap is what a jump is.
+    tp_sig_hier: bool = False       # hierarchy of roundness (Osler: 00 clusters beat 50): per-agent k
+                                    # by id — 20% k=1, 40% k=2, 30% k=3, 10% unsnapped. Self-similar
+                                    # grid; the second-order §6.1 prediction is that this preserves
+                                    # scale-freeness where a single k cannot. Overrides tp_sig>0 arms
+                                    # only in WHO snaps; requires tp_sig ignored when set.
+    close_mode: str = "home"        # what an exit PROMISES (the symmetry fix, v4).
+                                    # DEFAULT FLIPPED 2026-07-15: "home" is the symmetric null
+                                    # baseline (HANDOFF-v4 §5); "quantity" is the named treatment
+                                    # (squeezes, stranding, cover-drift). REFERENCE.md re-baselined
+                                    # on the same date; the old quantity targets are retired.
                                     # "quantity" = both tribes close by re-trading a fixed BTC
                                     #              quantity (v3 behaviour, bit-identical). Short's
                                     #              buyback cost is unbounded -> stranding.
@@ -142,6 +156,7 @@ class Config:
             "q >= 1": self.q >= 1,
             "W >= 1": self.W >= 1,
             "tp > 0": self.tp > 0,
+            "tp_sig >= 0": self.tp_sig >= 0,
             "sl_mode in {market,limit,wait}": self.sl_mode in ("market", "limit", "wait"),
             "close_mode in {quantity,home}": self.close_mode in ("quantity", "home"),
             "close_mode=home requires sl_mode=market": self.close_mode != "home" or self.sl_mode == "market",

@@ -65,8 +65,13 @@ whether the venue fills large orders at requested^0.6 or requested^0.11, which
 is the difference between a usable liquidity product and a decorative one.
 
 **Second, construct — or let the population discover — macroscopic symmetry.**
-Micro-symmetry is proven impossible; population-level symmetry is available two
-ways. Engineered: pin the mix at the zero-transfer locus from the 2-D map and
+Micro-symmetry is proven impossible; and note the sharpening from the v4 work:
+**symmetry, where achieved, is a large-n property, not a property of the
+mechanism** — the same home-close engine whose x-share pins at 0.50008 at n=150
+produces a 5:1 tribe asymmetry and ln p = +2.16 at n=2 (HANDOFF-v4 §2.7). Every
+symmetry claim in this document is implicitly conditioned on population size,
+and the correct control variable is open inventory, not n (FINDINGS_nopen_
+durations.md). Population-level symmetry is available two ways. Engineered: pin the mix at the zero-transfer locus from the 2-D map and
 monitor the residual as an operating metric. Discovered: a properly powered
 evolution run (cumulative fitness or ≥50k-tick epochs) tests whether imitation
 finds an interior equilibrium — and whether the tentative commons result holds:

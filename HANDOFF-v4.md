@@ -22,9 +22,22 @@ Scorecard of the mechanism alone:
 |---|---|
 | Unpredictability, ACF(r) ≈ 0 | **PASS** (n=500: +0.01) — but for the opposite reason to a real market |
 | DC count, N(δ) ~ δ⁻² | **PASS** — stable across seeds, engines, sl |
-| Volatility clustering | **FAIL** |
-| Fat tails | **FAIL — and provably unreachable** (§2.5) |
+| Volatility clustering | **FAIL** in physical-time ACF\|r\| — but see the intrinsic-time asterisk below |
+| Fat tails | **FAIL under homogeneous TP bands — provably** (§2.5). **REACHED at level 0.5** via heterogeneous TP roundness (FINDINGS_tpcluster.md) |
 | ⟨ω⟩ = δ (overshoot law) | **FAIL — unreachable for a different reason** (§2.4) |
+
+Two asterisks earned after this table was first written. *Fat tails:* the §6.1
+experiment ran — a hierarchy of TP roundness (agents with round fingers; no
+actor, no strategy) breaks compact support (P(|r|>4sd) = 2.1%, two seeds, both
+controls clean), while every single-scale grid re-proves §2.5. The impossibility
+was about homogeneous bands; heterogeneity of the *depth geometry* is enough for
+tails — though it damages the overshoot remnant further, so tails-vs-⟨ω⟩ is a
+trade at level 0.5 and the actor is still what §6.7 says it is.
+*Volatility clustering:* measured in intrinsic time, DC durations at large δ are
+FATTER-tailed than matched BM (CV 2.27 vs 0.81 — FINDINGS_nopen_durations.md §2):
+the engine mixes ratchet-fast and trapped-slow traversal regimes, which is what
+clustering looks like in event time. The physical-time FAIL stands; the
+intrinsic-time lens sees a seed of the phenomenon.
 
 The unpredictability pass deserves its asterisk: a real market is unpredictable
 because information is incorporated and arbitrage scrubs the residue; ours is
@@ -137,6 +150,14 @@ scale; that *is* scale-freeness. Coarse-graining scale m in ticks, n=150, T=12k:
   of scale **and** n, and they interact.
 - **UNVERIFIED:** whether any (n, tp, sl) gives q≈0.5 flat *and* a live market.
   `sl_enabled=False` reaches BM-like q only by freezing the market (ln p = +0.17).
+- **CAVEAT (added after exp_nopen): every q in this table is path-conditional.**
+  q co-moves with the run's realized trend (a seed with lnp = +4.1 shows elevated
+  q at every scale, mechanically), and the table is single-seed. The qualitative
+  claims stand; the levels need trend-stratification and ≥5 seeds. Also
+  established there: the mechanistic variable is **open inventory, not n** — at
+  matched n_open, different (n, c) give identical q(m) profiles at low-to-moderate
+  inventory — and inventory sets the momentum's **decay scale**, not its tick
+  strength (q1 floors at ~0.68 out to n_open = 127). FINDINGS_nopen_durations.md.
 
 ### 2.3 The DC count law N(δ) ~ δ⁻² — SOLID at n=150, BROKEN at n=500
 
@@ -369,10 +390,10 @@ silently destroys attribution.
 - `cfg.sl_grid` with `round()` snapped stops *at or past* entry → instantly
   triggered → **market froze (zero price steps)**. FIXED with floor/ceil.
 
-**LIVE TRAP.** `config.py` still defaults `close_mode="quantity"` while current
-work passes `"home"`. Anything not passing it explicitly (`main.py`, bare
-`Config()`) runs a **different model**. `REFERENCE.md`'s targets were generated on
-the quantity path. Flip the default and re-baseline, or make every entry explicit.
+**LIVE TRAP — RESOLVED 2026-07-15.** The default is now `close_mode="home"` (the
+symmetric-null baseline) and `REFERENCE.md` was re-baselined the same day on the
+new default; the quantity-path targets are retired. `"quantity"` remains the
+named treatment and is verified reachable and unchanged.
 
 **Do not delete `quantity`.** Per §V3.2's impossibility triangle (forced execution
 / spend-boundedness / tribe symmetry — pick two) and §2.6: home is the clean
@@ -384,7 +405,13 @@ runaway was only detectable **because** the quantity arm existed to compare agai
 
 ## 6. Open threads, in order
 
-1. **Cluster the TAKE-PROFITS, not the stops.** The corrected Osler experiment,
+1. **Cluster the TAKE-PROFITS — EXECUTED; see FINDINGS_tpcluster.md.** Outcome:
+   the first-order prediction confirmed in the only arm that could cleanly show
+   it (the hierarchy), both controls behaved, the second-order prediction
+   half-falsified (tails arrive, the overshoot remnant worsens). Remaining:
+   the confound-free hierarchy (drop k=1; pre-compensate the snap) and ≥10
+   seeds. Original design follows for the record.
+   **Cluster the TAKE-PROFITS, not the stops.** The corrected Osler experiment,
    and the last shot at a stylized fact at level 0. Stops are already clustered
    (§2.8) and firing them together produced no jumps. What creates jumps is
    clustering the **depth**: pile TPs onto discrete levels and the space *between*

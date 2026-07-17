@@ -177,13 +177,46 @@ class Agent:
             return max(0.0, min(budget, self.eur)) / ref
         return max(0.0, min(self.btc / cfg.q, self.btc))        # BTC sold
 
+    def _tp_sig_k(self, cfg: Config) -> int:
+        """Roundness of this agent's TP (0 = no snap). Hierarchy per Osler 2003:
+        coarse-heavy, deterministic in id (bit-reproducible, no RNG stream)."""
+        if cfg.tp_sig_hier:
+            m = self.id % 10
+            return 1 if m < 2 else (2 if m < 6 else (3 if m < 9 else 0))
+        return cfg.tp_sig
+
     def tp_price(self, cfg: Config) -> float:
-        """Passive take-profit limit price from entry x̄. Long sells above, short buys below."""
+        """Passive take-profit limit price from entry x̄. Long sells above, short buys below.
+
+        With tp_sig / tp_sig_hier the raw level is snapped to k significant
+        figures — TP clustering (HANDOFF-v4 §6.1). Snap is to the NEAREST level,
+        which is distance-unbiased on average (unlike sl_grid's away-snap, which
+        adds ~g/2); the guard below only kicks in when the grid spacing exceeds
+        the tp distance, where the nearest level can sit at or through the entry
+        (an instantly-marketable TP = churn, the sl_grid round() bug's cousin).
+        In that regime the snap goes one level outward and the effective tp
+        distance inflates — MEASURE the realized mean |ln(tp/x̄)| per arm; it is
+        the residual confound."""
         x = self.pos.avg_price
         tp = cfg.tp if self.tp_i is None else self.tp_i
         if cfg.log_thresholds:
-            return x * math.exp(tp) if self.side is Side.LONG else x * math.exp(-tp)
-        return x * (1 + tp) if self.side is Side.LONG else x * (1 - tp)
+            raw = x * math.exp(tp) if self.side is Side.LONG else x * math.exp(-tp)
+        else:
+            raw = x * (1 + tp) if self.side is Side.LONG else x * (1 - tp)
+        k = self._tp_sig_k(cfg)
+        if k > 0 and raw > 0:
+            e = math.floor(math.log10(raw)) - (k - 1)
+            step = 10.0 ** e
+            snapped = round(raw / step) * step
+            if self.side is Side.LONG:
+                if snapped <= x:                      # through/at entry: go outward
+                    snapped = (math.floor(raw / step) + 1) * step
+            else:
+                if snapped >= x:
+                    snapped = (math.ceil(raw / step) - 1) * step
+            if snapped > 0:
+                raw = snapped
+        return raw
 
     def sl_price(self, cfg: Config) -> float:
         """Stop trigger price from entry x̄. Long stops below, short stops above."""
