@@ -4,7 +4,5 @@ __pycache__
 __pycache__/
 arch/
 runs/
-tests/
-*.json
 *.csv
 *.patch

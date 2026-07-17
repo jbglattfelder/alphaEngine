@@ -1,0 +1,48 @@
+{
+  "conv_mixed_evolve": {
+    "n_round_trips": 4215,
+    "p_final": "3.2963997831651057",
+    "stranded": 0,
+    "x_share": "0.5005464460473027"
+  },
+  "home_default_n150": {
+    "n_round_trips": 5665,
+    "p_final": "0.08624221262347864",
+    "stranded": 1,
+    "x_share": "0.500367710958402"
+  },
+  "quantity_treatment": {
+    "n_round_trips": 5345,
+    "p_final": "0.2549870328168722",
+    "stranded": 0,
+    "x_share": "0.508384835119144"
+  },
+  "reference_row_f05_s1": {
+    "n_round_trips": 10188,
+    "p_final": "0.0005895985292513698",
+    "stranded": 3,
+    "x_share": "0.5000084847260455"
+  },
+  "scale_invariance": {
+    "identical_2p4": true,
+    "identical_2pm6": true
+  },
+  "sl_limit_arm": {
+    "n_round_trips": 1012,
+    "p_final": "0.9795792277107832",
+    "stranded": 14,
+    "x_share": "0.5024631531526423"
+  },
+  "sl_wait_arm": {
+    "n_round_trips": 3071,
+    "p_final": "12.533323292329182",
+    "stranded": 0,
+    "x_share": "0.5007530005100794"
+  },
+  "tp_hierarchy": {
+    "n_round_trips": 3388,
+    "p_final": "0.05",
+    "stranded": 0,
+    "x_share": "0.5001365861988145"
+  }
+}
