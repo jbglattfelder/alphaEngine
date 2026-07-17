@@ -112,6 +112,16 @@ the CSV when you change the config**, or you will analyse the old feed.
 
 ---
 
+## Validate before you trust a change
+
+    python3 test_benchmarks.py            # ~30s: 8 bit-exact outcomes across every engine path
+    python3 test_benchmarks.py --update   # re-freeze after an INTENTIONAL model change (name it in the commit)
+
+The model is chaotic and bit-reproducible, so the comparison is exact equality —
+a red result after a "refactor" means the refactor changed the model.
+`tests/test_portable_init.py` and `test_bm.py` guard the capital draw and the
+DC instrument separately.
+
 ## Gotchas — read before you trust a number
 
 - **The default engine is the untethered symmetric baseline** (`close_mode="home"`,
