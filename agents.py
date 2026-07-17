@@ -100,6 +100,11 @@ class Agent:
     tp_ref: Optional[int] = None     # resting TP limit (the book's standing depth)
     close_ref: Optional[int] = None  # resting reduce-only SL close limit (sl_mode="limit")
     sl_level: Optional[float] = None # SL trigger line (dormant until price touches)
+    tp_i: Optional[float] = None     # per-agent TP band (None = use cfg.tp). Heterogeneous
+    sl_i: Optional[float] = None     # thresholds break the single price scale: with one tp
+                                     # for everyone, EVERY price step is exactly tp (measured:
+                                     # median|log-step|/tp = 1.000 over an 8x tp range), so the
+                                     # price is a lattice walk and scale-free laws cannot hold.
     sl_is_buy: bool = False          # SL close direction: buy (short) vs sell (long)
     opened_ever: bool = False        # has this agent ever opened a position
     entry_q: float = 0.0             # |q| right after opening (entry notional, EUR) — for the trade log
@@ -175,16 +180,31 @@ class Agent:
     def tp_price(self, cfg: Config) -> float:
         """Passive take-profit limit price from entry x̄. Long sells above, short buys below."""
         x = self.pos.avg_price
+        tp = cfg.tp if self.tp_i is None else self.tp_i
         if cfg.log_thresholds:
-            return x * math.exp(cfg.tp) if self.side is Side.LONG else x * math.exp(-cfg.tp)
-        return x * (1 + cfg.tp) if self.side is Side.LONG else x * (1 - cfg.tp)
+            return x * math.exp(tp) if self.side is Side.LONG else x * math.exp(-tp)
+        return x * (1 + tp) if self.side is Side.LONG else x * (1 - tp)
 
     def sl_price(self, cfg: Config) -> float:
         """Stop trigger price from entry x̄. Long stops below, short stops above."""
         x = self.pos.avg_price
+        sl = cfg.sl if self.sl_i is None else self.sl_i
         if cfg.log_thresholds:
-            return x * math.exp(-cfg.sl) if self.side is Side.LONG else x * math.exp(cfg.sl)
-        return x * (1 - cfg.sl) if self.side is Side.LONG else x * (1 + cfg.sl)
+            raw = x * math.exp(-sl) if self.side is Side.LONG else x * math.exp(sl)
+        else:
+            raw = x * (1 - sl) if self.side is Side.LONG else x * (1 + sl)
+        if cfg.sl_grid > 0 and raw > 0:
+            # Cluster the stops onto a shared log grid (see cfg.sl_grid). Snap AWAY from
+            # the entry -- floor for a long, ceil for a short -- never to the nearest:
+            # nearest can land the stop at or beyond the entry, which is an
+            # instantly-triggered stop and freezes the market (measured: zero price
+            # steps at g=0.02). Cost of the safe direction: the effective stop distance
+            # grows by ~g/2 on average, so g is CONFOUNDED with sl. Keep g << sl to
+            # isolate clustering from stop distance.
+            k = math.log(raw) / cfg.sl_grid
+            k = math.floor(k) if self.side is Side.LONG else math.ceil(k)
+            raw = math.exp(k * cfg.sl_grid)
+        return raw
 
     def reset_pressure(self) -> None:
         """Full reset after acting (§8)."""

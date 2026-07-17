@@ -46,8 +46,17 @@ class Config:
                                 # baseline split is NOT implemented in the CLOB open_btc; see agents.py)
     W: int = 15                 # VESTIGIAL (CLOB era): entries are IOC and TP limits never expire, so
                                 # nothing in the book ages out. Kept only for config-file compatibility.
-    tp: float = 0.01            # take-profit: close position when its return >= +tp
-    sl: float = 0.01            # stop-loss:   close position when its return <= -sl
+    tp: float = 0.1 #0.10            # take-profit: close position when its return >= +tp
+    sl: float = 0.1 #0.10            # stop-loss:   close position when its return <= -sl
+    sl_grid: float = 0.0        # >0 = snap SL trigger levels to a LOG grid of this spacing.
+                                # 0 = off (each agent stops at its own entry*e^-sl, so stops are
+                                # SCATTERED and fire one at a time -> no cascade -> thin tails).
+                                # Osler (2005, JIMF 24:219) finds FX stop-losses cause price
+                                # cascades BECAUSE they cluster near round numbers: hitting a
+                                # cluster fires many stops in one tick, aggregating into a large
+                                # market order that walks deep and reaches the next cluster.
+                                # Log grid (not price grid) because p spans e-folds here, and
+                                # round numbers are ~log-spaced in a scale-free market anyway.
     sl_enabled: bool = True         # arm stop-losses (False = TP-limit depth only, the stabiliser)
     close_mode: str = "quantity"    # what an exit PROMISES (the symmetry fix, v4):
                                     # "quantity" = both tribes close by re-trading a fixed BTC
