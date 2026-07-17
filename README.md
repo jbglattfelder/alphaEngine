@@ -114,6 +114,13 @@ the CSV when you change the config**, or you will analyse the old feed.
 
 ## Gotchas — read before you trust a number
 
+- **The default engine is the untethered symmetric baseline** (`close_mode="home"`,
+  since 2026-07-15): exits deliver what the position holds, there is no forced-loss
+  channel, and therefore nothing pins the price level. Large log-price excursions
+  (|ln p| of 10–20 over long runs) are **by design**, not a bug — use a log price
+  axis. The tethered, stranding-prone world is the named treatment
+  `close_mode="quantity"` (HANDOFF-v4 §2.6/§5; REFERENCE.md's header).
+
 - **`close_mode` default vs. what you run.** `config.py` defaults to
   `"quantity"` (each tribe re-trades a fixed BTC quantity; produces stranding);
   current work uses `"home"` (each tribe delivers what it holds; the symmetric
