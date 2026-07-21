@@ -112,14 +112,22 @@ def main() -> None:
 
 
 def _plot(D, NDC, OS, E_N, C_N, R_N, E_os, C_os, R_os, ratio, sd, n_t) -> None:
+    # the engine line: every figure names its arm (the 4x silent-default lesson)
+    ENGINE = (f"close={CLOSE_MODE} entry={globals().get('ENTRY_MODE','ioc')} "
+              f"impatience={globals().get('HOLD_FIRES_CLOSE', False)}")
+
     import matplotlib
     if not SHOW:
         matplotlib.use("Agg")
+    # the engine line: every figure names its arm (the 4x silent-default lesson)
+    ENGINE = (f"close={CLOSE_MODE} entry={globals().get('ENTRY_MODE','ioc')} "
+              f"impatience={globals().get('HOLD_FIRES_CLOSE', False)}")
+
     import matplotlib.pyplot as plt
 
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(12.5, 5.2))
     fig.suptitle(f"Intrinsic-time scaling laws  |  n={N}, T={T:,}, seed={SEED}, c={C}, "
-                 f"tp={TP} sl={SL} close={CLOSE_MODE}  |  tick sd(r)={sd:.3g}",
+                 f"tp={TP} sl={SL}  |  {ENGINE}  |  tick sd(r)={sd:.3g}",
                  fontsize=11, fontweight="bold")
     xs = np.array([D.min(), D.max()])
 

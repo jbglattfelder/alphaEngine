@@ -25,6 +25,8 @@ from analysis import Recorder
 # ---------------- edit these ----------------
 N, T, SEED = 500, 100_000, 1
 C, TP, SL = 0.004, 0.01, 0.01
+ENTRY_MODE = "ioc"          # "ioc" | "rest"
+HOLD_FIRES_CLOSE = False    # impatience (see HANDOFF_clob.md)
 OUT = "price_feed.csv"
 RUN_CHECKS = True          # False is faster on long runs
 # --------------------------------------------
@@ -34,7 +36,8 @@ COLS = ["tick", "p_int", "matched_btc", "matched_eur", "crossed",
 
 
 def main() -> None:
-    cfg = Config(n=N, T=T, seed=SEED, c=C, tp=TP, sl=SL)
+    cfg = Config(n=N, T=T, seed=SEED, c=C, tp=TP, sl=SL,
+                 entry_mode=ENTRY_MODE, hold_fires_close=HOLD_FIRES_CLOSE)
     print(cfg.summary())
     sim = Simulation(cfg, recorder=Recorder(), run_checks=RUN_CHECKS).run()
     rec = sim.recorder

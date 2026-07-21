@@ -91,6 +91,18 @@ components.
   it is a different price process; characterize before comparing to level 1.
 - Class-2 hitting probability vs n: presumably ~exponentially small; one sweep
   would bound where "statistically live" is honest.
+- Phase-conditioned DC decomposition of the oscillator (§7): split DC events
+  by cycle phase — build (open count rising) vs flush (falling) — and measure
+  ⟨ω⟩/δ per phase. PREDICTION, registered before running: the super-linear
+  overshoot (level 6.58, slope 1.69 on the pooled n=500 figure) is
+  concentrated in the FLUSH events; build-phase overshoots are near-BM.
+  Tooling: exp_oscillator_phase.py on the export_price.py feed (which now
+  carries the entry_mode/hold_fires_close knobs; the scaling_law figure title
+  now names the arm). Measured lesson while building it: short windows are
+  useless — a T=24k slice caught the initial monotone collapse only, and
+  monotone sawtooths generate almost no DC events (15 vs ~110 expected).
+  The test needs the full multi-cycle horizon. STATUS: prediction registered,
+  UNTESTED — the full-feed run is the user's next artifact.
 - The maker build itself: A–S quotes from house inventory, GRW zero-feedback
   control arm, pre-registered ⟨ω⟩/δ → 1 and "both absorbing classes become
   impossible" (the binary falsifiers, checkable at n=2 in seconds).
