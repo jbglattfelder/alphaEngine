@@ -203,6 +203,75 @@ class Simulation:
         self._trades_this_tick.extend(trades)
         return trades
 
+    def _step_rest(self, t: int, sl_buys: list, sl_sells: list) -> None:
+        """entry_mode="rest" — the v5 pure CLOB (no auction).
+
+        SL closes fire as market orders walking the book. Entries are limits at
+        the last price: fill what crosses, REST the remainder — the model's
+        first passive depth that is not a winner waiting. One resting entry per
+        agent; a clock-fire while flat cancels-and-replaces it at the live
+        price (b'), bounding staleness by the agent's own period d/c.
+        Submission order is shuffled on the dedicated (seed, 0xA1FA, t) stream.
+        Maker-fill solvency: a resting BUY at px can only ever pay px per coin,
+        so capping size at eur/px at submission makes later maker fills safe;
+        the close-begin hook cancels the entry before any cover can drain EUR."""
+        cfg, book = self.cfg, self.book
+        srng = np.random.default_rng([cfg.seed or 0, 0xA1FA, t])
+        closes = sl_buys + sl_sells
+        order = srng.permutation(len(closes)) if len(closes) > 1 else range(len(closes))
+        for i in order:
+            a, sz = closes[i]
+            if a.pos.b < 0:                          # short cover: budget-capped BUY
+                budget = max(a.eur, 0.0)
+                if cfg.close_mode == "home":
+                    budget = max(0.0, min(a.eur, a.pos.q))
+                self._submit(LimitOrder(a.id, Dir.BUY, 1e18, sz, t,
+                                        is_close=True, pos_side=a.side),
+                             eur_budget=budget, rest_residual=False)
+            else:                                    # long close: SELL held coins
+                self._submit(LimitOrder(a.id, Dir.SELL, 1e-15, sz, t,
+                                        is_close=True, pos_side=a.side),
+                             rest_residual=False,
+                             btc_budget=(max(a.btc, 0.0) if cfg.symmetric_solvency else None))
+        firing = [a for a in self.pop.alive()
+                  if a.pos.b == 0 and not a.closing and a.ready_to_fire()
+                  and (cfg.recycle or not a.opened_ever)]
+        order = srng.permutation(len(firing)) if len(firing) > 1 else range(len(firing))
+        for i in order:
+            a = firing[i]
+            a.reset_pressure()
+            if a.entry_ref is not None:              # b': cancel-and-replace
+                book.cancel(a.entry_ref)
+                a.entry_ref = None
+            # Marketable-to-touch: quote AT the opposite best, so entries can
+            # actually cross the spread. Pricing at last_price alone is a fixed
+            # point — every fill happens at last, so last never moves and price
+            # formation dies (measured: frozen at x_0, TPs never touched). The
+            # touch is the minimal aggression that keeps the price alive without
+            # introducing a new parameter; residuals rest at the same level.
+            if a.side is Side.LONG:
+                px = book.best_ask if book.best_ask is not None else book.last_price
+            else:
+                px = book.best_bid if book.best_bid is not None else book.last_price
+            sz = a.open_btc(cfg, px)
+            if sz <= 0 or px <= 0:
+                continue
+            if a.side is Side.LONG:
+                sz = min(sz, max(a.eur, 0.0) / px)   # maker-fill solvency cap
+            else:
+                sz = min(sz, max(a.btc, 0.0))
+            if sz <= 1e-12 / cfg.x_0:
+                continue
+            a.opened_ever = True
+            a.req_q = sz * px
+            o = LimitOrder(a.id, Dir.BUY if a.side is Side.LONG else Dir.SELL,
+                           px, sz, t, pos_side=a.side)
+            self._submit(o, eur_budget=(max(a.eur, 0.0) if a.side is Side.LONG else None),
+                         btc_budget=(max(a.btc, 0.0) if (a.side is Side.SHORT
+                                     and cfg.symmetric_solvency) else None),
+                         rest_residual=True)
+            a.entry_ref = o.oref if (o.active and o.size > book.size_eps) else None
+
     def _fire_close(self, a, t: int) -> None:
         """Inject a marketable close for a position being exited (SL, or stuck cover).
 
@@ -303,6 +372,9 @@ class Simulation:
             a.pos.q = 0.0
             if a.tp_ref is not None:
                 self.book.cancel(a.tp_ref)
+            if a.entry_ref is not None:
+                self.book.cancel(a.entry_ref)
+                a.entry_ref = None
             if a.close_ref is not None:
                 self.book.cancel(a.close_ref)
             a.clear_orders()
@@ -324,6 +396,14 @@ class Simulation:
         # 2. every open position rests a TP limit (long sells above, short buys below).
         #    These resting exits ARE the book's two-sided depth. Also arm the SL line.
         for a in self.pop.alive():
+            if (a.tp_ref is not None and not a.closing
+                    and abs(a.pos.b) > abs(a.tp_pos_b) + 1e-9 / cfg.x_0):
+                # entry_mode="rest": the resting entry filled further after the TP
+                # rested — the position GREW, so the TP size is stale. Cancel; it
+                # re-rests just below. (Shrinkage is a partial TP fill: position
+                # and resting size fall in lockstep — leave it its queue priority.)
+                self.book.cancel(a.tp_ref)
+                a.tp_ref = None
             if a.pos.b != 0 and not a.closing and a.tp_ref is None:
                 if a.entry_q == 0.0:                 # fresh position: log entry notional
                     a.entry_q = abs(a.pos.q)
@@ -332,6 +412,7 @@ class Simulation:
                     o = LimitOrder(a.id, Dir.SELL, a.tp_price(cfg), a.pos.b, t,
                                    is_close=True, pos_side=Side.LONG)
                     a.tp_ref = o.oref
+                    a.tp_pos_b = a.pos.b
                     self._submit(o, btc_budget=(max(a.btc, 0.0) if cfg.symmetric_solvency else None))
                 else:
                     tpp = a.tp_price(cfg)
@@ -347,6 +428,7 @@ class Simulation:
                     o = LimitOrder(a.id, Dir.BUY, tpp, size, t,
                                    is_close=True, pos_side=Side.SHORT)
                     a.tp_ref = o.oref
+                    a.tp_pos_b = a.pos.b
                     self._submit(o, eur_budget=budget)
                 a.sl_level = a.sl_price(cfg)
                 a.sl_is_buy = a.side is Side.SHORT
@@ -365,6 +447,9 @@ class Simulation:
                         a.closing = True
                         if a.tp_ref is not None:
                             book.cancel(a.tp_ref); a.tp_ref = None
+                        if a.entry_ref is not None:      # reduce-only from here: a resting
+                            book.cancel(a.entry_ref)     # BUY could overdraw the EUR the
+                            a.entry_ref = None           # cover is about to spend
                         if cfg.sl_mode == "limit":
                             # stop-limit discipline: reduce-only limit AT the stop level.
                             # No cascade (never walks past the level), no EUR burn while
@@ -398,11 +483,29 @@ class Simulation:
                             # stranded-but-SOLVENT (the correct margin-free spot-short behaviour).
                             sl_buys.append((a, min(-a.pos.b, max(a.eur, 0.0) / p_prev)))
 
+        # 3b. impatience closes (hold_fires_close): a clock-fire while HOLDING is
+        #     an exit at market. Rides the existing close machinery: mark closing,
+        #     cancel resting orders, and step 6's stuck-cover re-fire submits the
+        #     market close this same tick via _fire_close (both entry modes).
+        if cfg.hold_fires_close:
+            for a in self.pop.alive():
+                if a.pos.b != 0 and not a.closing and a.ready_to_fire():
+                    a.reset_pressure()
+                    a.closing = True
+                    if a.tp_ref is not None:
+                        self.book.cancel(a.tp_ref); a.tp_ref = None
+                    if a.entry_ref is not None:
+                        self.book.cancel(a.entry_ref); a.entry_ref = None
+
+        if cfg.entry_mode == "rest":
+            self._step_rest(t, sl_buys, sl_sells)
+            sl_buys, sl_sells = [], []           # steps 4-5 below become exact no-ops
+
         # 4. gather ENTRY market flow (flat & ready) + SL closes
         buys: list[tuple] = list(sl_buys)      # (agent, btc)  BUY BTC
         sells: list[tuple] = list(sl_sells)    # (agent, btc)  SELL BTC
         for a in self.pop.alive():
-            if a.pos.b == 0 and not a.closing and a.ready_to_fire():
+            if cfg.entry_mode != "rest" and a.pos.b == 0 and not a.closing and a.ready_to_fire():
                 if not cfg.recycle and a.opened_ever:
                     continue
                 a.reset_pressure()

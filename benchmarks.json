@@ -5,6 +5,12 @@
     "stranded": 0,
     "x_share": "0.5005464460473027"
   },
+  "entry_rest_v5": {
+    "n_round_trips": 681,
+    "p_final": "0.1544413411513133",
+    "stranded": 1,
+    "x_share": "0.5001436136275312"
+  },
   "home_default_n150": {
     "n_round_trips": 5665,
     "p_final": "0.08624221262347864",
@@ -22,6 +28,12 @@
     "p_final": "0.0005895985292513698",
     "stranded": 3,
     "x_share": "0.5000084847260455"
+  },
+  "rest_impatience": {
+    "n_round_trips": 2953,
+    "p_final": "0.06591543974839446",
+    "stranded": 1,
+    "x_share": "0.500147024579546"
   },
   "scale_invariance": {
     "identical_2p4": true,

@@ -90,6 +90,26 @@ class Config:
                                     #            book-walking cascade, no EUR burn while waiting.
                                     # "wait"   = market cover only when the FULL cover is affordable
                                     #            at the current price; otherwise spend nothing this tick.
+    entry_mode: str = "ioc"         # how ENTRIES meet the market (v5 pure-CLOB switch):
+                                    # "ioc"  = current behaviour, bit-identical: balanced entry flow
+                                    #          crosses at p_prev impact-free (the auction vestige);
+                                    #          the net imbalance walks the book; residuals VANISH.
+                                    # "rest" = no auction. Every entry is a limit at the last price:
+                                    #          fills what crosses, RESTS the remainder as real depth
+                                    #          (the first passive orders that are not winners waiting).
+                                    #          One resting entry per agent; each clock-fire while flat
+                                    #          cancels-and-replaces it at the live price, so staleness
+                                    #          is bounded by the agent's own period d/c and W stays
+                                    #          vestigial. SL closes are market orders in both modes.
+    hold_fires_close: bool = False  # impatience: the pressure clock also runs while HOLDING, and a
+                                    # fire while in-position exits at market. One clock, two roles:
+                                    # opens you when flat, closes you when stale (timescale = the
+                                    # agent's own period d/c; no new parameter, scale-covariant).
+                                    # This is unconditional-in-market-state aggression distributed
+                                    # into every agent — the decentralised alternative to the house
+                                    # maker for keeping a pure CLOB alive (see HANDOFF_clob.md):
+                                    # without it, entry_mode="rest" converges to the all-holding
+                                    # absorbing state at ANY population size.
     recycle: bool = True        # False = each agent opens at most once (no re-entry)
     x_accounting: bool = True   # True = size/PnL/exits in geometric-mean units X (1 X = p^-.5 EUR = p^.5 BTC); size = (W_X/q)/sqrt(p), identical both tribes
     symmetric_sizing: bool = False  # True = long open size price-independent (/x_0 not /p) to test drift
@@ -159,6 +179,7 @@ class Config:
             "tp_sig >= 0": self.tp_sig >= 0,
             "sl_mode in {market,limit,wait}": self.sl_mode in ("market", "limit", "wait"),
             "close_mode in {quantity,home}": self.close_mode in ("quantity", "home"),
+            "entry_mode in {ioc,rest}": self.entry_mode in ("ioc", "rest"),
             "close_mode=home requires sl_mode=market": self.close_mode != "home" or self.sl_mode == "market",
             "sl > 0": self.sl > 0,
             "epsilon >= 0": self.epsilon is not None and self.epsilon >= 0,
@@ -196,6 +217,7 @@ class Config:
                   "mirror" if self.mirror else "legacy (/p)")
         return (
             "Alpha Engine — resolved configuration\n"
+            f"  engine            : close_mode={self.close_mode}  sl_mode={self.sl_mode}  entry_mode={self.entry_mode}  hold_fires_close={self.hold_fires_close}  conv_mode={self.conv_mode}\n"
             f"  population        : {self.total_agents} agents ({self.n} long / {self.n} short)\n"
             f"  total capital K   : {self.K:,.0f} EUR  (K/2 per side)\n"
             f"  x_0 / p_int(0)    : {self.x_0}\n"

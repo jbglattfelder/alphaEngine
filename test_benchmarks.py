@@ -66,6 +66,9 @@ CASES = {
                                    conv_mode="mixed", evolve=True, evolve_every=400),
     "tp_hierarchy":           dict(n=150, T=2000, seed=1, c=0.004, tp_sig_hier=True,
                                    tp=0.01, sl=0.01),
+    "entry_rest_v5":          dict(n=150, T=2000, seed=1, c=0.004, entry_mode="rest"),
+    "rest_impatience":        dict(n=150, T=2000, seed=1, c=0.004, entry_mode="rest",
+                                   hold_fires_close=True),
     "reference_row_f05_s1":   dict(f=0.5, c=0.004, T=6000, seed=1, x_accounting=True,
                                    log_thresholds=True, symmetric_solvency=True),
 }

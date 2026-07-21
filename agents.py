@@ -111,6 +111,8 @@ class Agent:
     entry_tick: int = 0              # tick the position opened — for lifetime/drift analysis
     req_q: float = 0.0               # EUR notional REQUESTED at fire (size*p_prev) — for gamma = filled-vs-requested
     conv_live: bool = True           # sizing convention (conv_mode="mixed"): convert at live price vs at x_0
+    entry_ref: Optional[int] = None  # oref of this agent's resting entry (entry_mode="rest"; at most one)
+    tp_pos_b: float = 0.0            # pos.b snapshot when the TP was rested (refresh trigger under partial entry fills)
 
     # ── derived views ─────────────────────────────────────────────────────────
     @property
@@ -136,9 +138,11 @@ class Agent:
 
     # ── per-tick mechanics ────────────────────────────────────────────────────
     def accumulate_pressure(self, cfg: Config) -> None:
-        """Flat pressure increment — drives OPEN timing only (§6). Accrues only
-        while flat; a committed position doesn't build phantom open-pressure."""
-        if self.is_flat:
+        """Pressure increment. Default: accrues only while flat (drives OPEN
+        timing; a committed position builds no phantom open-pressure). With
+        cfg.hold_fires_close the clock also runs while holding — the same fire
+        threshold then means "exit at market" (impatience; see config)."""
+        if self.is_flat or (cfg.hold_fires_close and not self.closing):
             self.phi += cfg.c
 
     def ready_to_fire(self) -> bool:
