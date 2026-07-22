@@ -23,10 +23,10 @@ from simulation import Simulation
 from analysis import Recorder
 
 # ---------------- edit these ----------------
-N, T, SEED = 500, 100_000, 1
-C, TP, SL = 0.004, 0.01, 0.01
-ENTRY_MODE = "ioc"          # "ioc" | "rest"
-HOLD_FIRES_CLOSE = False    # impatience (see HANDOFF_clob.md)
+N, T, SEED = 150, 100_000, 42
+C, TP, SL = 0.004, 0.01, 0.02
+ENTRY_MODE = "rest"          # "ioc" | "rest"
+HOLD_FIRES_CLOSE = True    # impatience (see HANDOFF_clob.md)
 OUT = "price_feed.csv"
 RUN_CHECKS = True          # False is faster on long runs
 # --------------------------------------------
