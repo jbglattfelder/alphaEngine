@@ -72,9 +72,15 @@ def run(seed: int) -> None:
         if p1 != p0 and p0 > 0 and p1 > 0:
             dln = float(np.log(p1) - np.log(p0))
             a = idmap.get(o.agent_id)
-            role = ("entry" if not getattr(o, "is_close", False)
-                    else ("sl" if (a is not None and getattr(a, "closing", False))
-                          else "impatience"))
+            # taxonomy v2: entry | tp_cross (is_close, owner not closing) |
+            # close (canonical: short->BUY, long->SELL) | flip (over-cover excess)
+            if not getattr(o, "is_close", False):
+                role = "entry"
+            elif a is None or not getattr(a, "closing", False):
+                role = "tp_cross"
+            else:
+                canonical = (o.direction.name == "BUY") == (o.pos_side is Side.SHORT)
+                role = "close" if canonical else "flip"
             key = f"{o.direction.name}|{'L' if o.pos_side is Side.LONG else 'S'}|{role}"
             e = acc.setdefault(key, [0.0, 0])
             e[0] += dln

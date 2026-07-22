@@ -103,6 +103,7 @@ class Simulation:
         self.agent_is_long = np.array([a.side is Side.LONG for a in self.pop.agents])
         self.t = 0
         self.stopped_reason: Optional[str] = None
+        self._last_trade_t: int = 0          # stall detector (cfg.stall_T)
         # per-round-trip log: one entry per settled position (side, TP/SL, realized
         # PnL, entry notional). Committed instrumentation — HANDOFF §7 complained
         # that the fill instrument was a monkeypatch that never survived; this one
@@ -691,6 +692,12 @@ class Simulation:
 
         if n_long + n_short == 0:
             self.stopped_reason = "all agents dead"
+            return False
+        if self._trades_this_tick:
+            self._last_trade_t = t
+        elif self.cfg.stall_T and t - self._last_trade_t >= self.cfg.stall_T:
+            self.stopped_reason = (f"stalled: no trades for {self.cfg.stall_T} ticks "
+                                   f"(absorbing state; HANDOFF-master par 4.7)")
             return False
         return True
 

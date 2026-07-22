@@ -110,6 +110,10 @@ class Config:
                                     # maker for keeping a pure CLOB alive (see HANDOFF_clob.md):
                                     # without it, entry_mode="rest" converges to the all-holding
                                     # absorbing state at ANY population size.
+    stall_T: int = 0                # liveness detector: stop the run if no trade has printed for this
+                                    # many ticks (0 = off). Detects the CLOB absorbing states (Class 1/2,
+                                    # HANDOFF-master par 4.7) instead of burning dead ticks; stopped_reason
+                                    # names the stall. Detection, not prevention -- the freeze is a theorem.
     recycle: bool = True        # False = each agent opens at most once (no re-entry)
     x_accounting: bool = True   # True = size/PnL/exits in geometric-mean units X (1 X = p^-.5 EUR = p^.5 BTC); size = (W_X/q)/sqrt(p), identical both tribes
     symmetric_sizing: bool = False  # True = long open size price-independent (/x_0 not /p) to test drift

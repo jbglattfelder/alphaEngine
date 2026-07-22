@@ -406,24 +406,38 @@ direction is a free, unstable degree of freedom — not that any direction is
 achievable. **The ≥10-seed per-arm tally RAN (exp_direction_tally.py, canonical arm
 n=500/tp=sl=0.01/T=20k, seeds 1–10): 8 DOWN / 2 UP, two-sided fair-coin
 p = 0.109.** The duality null (50/50) is NOT rejected; the down-lean persists
-but is unproven at this power. The registered channel fingerprint, corrected
-mid-run (a channel's net cannot "flip sign with direction" — the sign is baked
-into the BUY/SELL tag; read PAIRED channel sums instead), found structure the
-naive version could not: **entries are net-UP in every run (+14.9 mean in down
-runs, +12.2 in up runs) and closes are net-DOWN in every run (−17.3, −11.1).**
-Neither pair flips. The direction is not an agnostic amplifier picking a
-noise-seeded side — it is a **standing tug-of-war** between a persistent
-entry-side up-force and a persistent close-side down-force; the run's direction
-is their near-cancelling residual. This revises the "asymmetry is emergent"
-reading: the *feedback growth* is emergent (the quarter-binned table stands),
-but a structural signed pair underlies it. Anatomy of the up-force: long
-entries out-push short entries in gross (BUY|L|entry 172 vs SELL|S|entry 157 in
-down runs; same ordering in up runs) — precisely where the BTC-denomination
-weld lives (a long entry's BTC size carries /px; a short's does not). **Next,
-with a named target: the book-mirror (EUR-denominated book) — registered
-prediction: the tug-of-war's signs invert; corollary, the 8/2 lean inverts if
-the lean is real.** Prior mixed-arm tally (sl=2tp: down, down, up; probes:
-tp=2sl down) is kept for the record but not pooled. Artifact: tally.jsonl.
+but is unproven at this power. The channel fingerprint was corrected twice (v1 flip-test ill-posed; v1 role
+tags muddled — "sl" pooled SL+impatience, "impatience" was TP-crosses; the v1
+reading "closes net-DOWN" and a claimed "/px sizing weld" are both RETRACTED —
+x_accounting sizes both tribes (W_X/q)/√p, provably symmetric).
+
+**The corrected four-force decomposition (taxonomy v2; seeds 1↓, 2↑, T=20k):**
+fresh flow — entries (+10/+20; longs fire ~6% more) and canonical closes
+(+38/+35) — pushes **UP in both directions**; the entire down-force is the
+**stale-print family**: flips (−21/−26) and TP-crosses (−29/−28), negative in
+both directions. Constant structural drag vs fluctuating up-force; direction =
+the residual; the 8/2 lean is the drag winning slightly more often.
+
+**THE SEED, identified at the source (exp_seed_asymmetry.py, both seeds):**
+flips are **shorts-only** (5069/6047 vs L=0) and print **below last 96–98%** of
+the time (fresh flow: ~44–49%, a coin). Cause, in one line of code: the
+home-mode short exit is a **spend order**, `size = pos.q / p_close` — a short
+that sold |b| coins at x̄ exits with BTC size |b|·x̄/p_close > |b| whenever
+p_close < x̄, i.e. **every profitable close over-buys by e^{tp} by
+construction**; the engine sells the excess at market, below last. The long's
+exit promises BTC (sells pos.b, exact — zero flips). **"Home" close did not
+remove the denomination weld; it moved it to the exits**: "deliver what you
+hold" is EUR for one tribe and BTC for the other, meeting a BTC-denominated
+book. Quantity-mode was BTC-exact and stranded; home-mode is wealth-symmetric
+and drags. Falsified en route: "shorts linger in the close pipeline" (longs
+close *slower*, 3.6 vs 2.8 ticks, and complete more SL/impatience episodes —
+shorts exit via TP more; the entry-count gap needs a different account, OPEN).
+
+**Registered next (before any run): the BTC-exact exit arm** — short exits
+sized |pos.b| with EUR budget pos.q. Predictions: flips vanish; the down-drag
+loses its flip component (~40%); the 10-seed tally moves toward 50/50. If the
+drag persists via TP-crosses alone, the book-mirror inherits the case.
+Artifacts: tally.jsonl (taxonomy v2), seed_asym.jsonl.
 
 ---
 
