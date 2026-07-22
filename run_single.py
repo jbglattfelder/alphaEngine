@@ -16,11 +16,11 @@ from simulation import Simulation
 from analysis import Recorder, Analyser
 
 # ---------------- edit these ----------------
-N     = 500     # agents PER SIDE   (total population = 2*N)
+N     = 150     # agents PER SIDE   (total population = 2*N)
 T     = 100_000    # number of ticks
-SEED  = 1
+SEED  = 42
 F     = 0.5     # initial home fraction
-C     = 0.004 # 0.004   # firing rate (activity); higher = livelier & slower
+C     = 0.004   # firing rate (activity); higher = livelier & slower
 
 TP    = 0.01     # take-profit band
 SL    = 0.02     # stop-loss band
@@ -32,9 +32,11 @@ SL_MODE    = "market"    # "market" | "limit" | "wait"   (close_mode="home" requ
 X_ACCOUNTING       = True   # geometric-mean (X) sizing, identical formula both tribes
 LOG_THRESHOLDS     = True   # log-symmetric TP/SL bands (kills the percentage gauge drift)
 SYMMETRIC_SOLVENCY = True   # clamp SELLs by BTC held, mirroring the EUR clamp on BUYs
+ENTRY_MODE         = "rest" # how ENTRIES meet the market (v5 pure-CLOB switch)
+HOLD_FIRES_CLOSE   = True   # impatience: the pressure clock also runs while HOLDING -> close
 
 SNAPSHOT_EVERY = 500   # per-agent PnL snapshot cadence (0 = off; faster on long runs)
-RUN_CHECKS     = True   # per-tick conservation + solvency asserts (False is faster)
+RUN_CHECKS     = True  # per-tick conservation + solvency asserts (False is faster)
 SHOW           = True
 # --------------------------------------------
 
@@ -43,7 +45,9 @@ cfg = Config(n=N, T=T, seed=SEED, f=F, c=C,
              close_mode=CLOSE_MODE, sl_mode=SL_MODE,
              x_accounting=X_ACCOUNTING,
              log_thresholds=LOG_THRESHOLDS,
-             symmetric_solvency=SYMMETRIC_SOLVENCY)
+             symmetric_solvency=SYMMETRIC_SOLVENCY,
+             entry_mode=ENTRY_MODE,
+             hold_fires_close=HOLD_FIRES_CLOSE)
 print(cfg.summary())          # prints the RESOLVED switches -- check them against the block
 
 sim = Simulation(cfg, recorder=Recorder(), run_checks=RUN_CHECKS,

@@ -46,8 +46,8 @@ class Config:
                                 # baseline split is NOT implemented in the CLOB open_btc; see agents.py)
     W: int = 15                 # VESTIGIAL (CLOB era): entries are IOC and TP limits never expire, so
                                 # nothing in the book ages out. Kept only for config-file compatibility.
-    tp: float = 0.1 #0.10            # take-profit: close position when its return >= +tp
-    sl: float = 0.1 #0.10            # stop-loss:   close position when its return <= -sl
+    tp: float = 0.1             # take-profit: close position when its return >= +tp
+    sl: float = 0.1             # stop-loss:   close position when its return <= -sl
     sl_grid: float = 0.0        # >0 = snap SL trigger levels to a LOG grid of this spacing.
                                 # 0 = off (each agent stops at its own entry*e^-sl, so stops are
                                 # SCATTERED and fire one at a time -> no cascade -> thin tails).
@@ -101,7 +101,7 @@ class Config:
                                     #          cancels-and-replaces it at the live price, so staleness
                                     #          is bounded by the agent's own period d/c and W stays
                                     #          vestigial. SL closes are market orders in both modes.
-    hold_fires_close: bool = False  # impatience: the pressure clock also runs while HOLDING, and a
+    hold_fires_close: bool = True   # impatience: the pressure clock also runs while HOLDING, and a
                                     # fire while in-position exits at market. One clock, two roles:
                                     # opens you when flat, closes you when stale (timescale = the
                                     # agent's own period d/c; no new parameter, scale-covariant).

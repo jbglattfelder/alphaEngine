@@ -33,12 +33,24 @@ from analysis import Recorder
 from dc_analysis import measure, fit, load_csv
 
 # ---------------- edit these ----------------
-N, T, SEED = 500, 100_000, 1
-C, TP, SL = 0.004, 0.01, 0.02
-F = 0.5
-CLOSE_MODE = "quantity"     # NOT passed by earlier versions of this file: feeds built with
-SL_MODE    = "market"   # them silently used the config.py default ("quantity") -- a
-                        # DIFFERENT MODEL. Always state the mechanism explicitly.
+N     = 150     # agents PER SIDE   (total population = 2*N)
+T     = 100_000    # number of ticks
+SEED  = 42
+F     = 0.5     # initial home fraction
+C     = 0.004   # firing rate (activity); higher = livelier & slower
+
+TP    = 0.01     # take-profit band
+SL    = 0.02     # stop-loss band
+
+CLOSE_MODE = "home"      # "home" = each tribe delivers what it holds (v4 symmetric null)
+                         # "quantity" = both tribes re-trade a fixed BTC quantity (v3; stranding)
+SL_MODE    = "market"    # "market" | "limit" | "wait"   (close_mode="home" requires "market")
+
+X_ACCOUNTING       = True   # geometric-mean (X) sizing, identical formula both tribes
+LOG_THRESHOLDS     = True   # log-symmetric TP/SL bands (kills the percentage gauge drift)
+SYMMETRIC_SOLVENCY = True   # clamp SELLs by BTC held, mirroring the EUR clamp on BUYs
+ENTRY_MODE         = "rest" # how ENTRIES meet the market (v5 pure-CLOB switch)
+HOLD_FIRES_CLOSE   = True   # impatience: the pressure clock also runs while HOLDING -> close
 
 CSV_PATH = "price_feed.csv"
 REUSE_CSV = True        # True: skip the run if CSV_PATH already exists (analysis is instant)
@@ -56,8 +68,14 @@ SHOW = True
 
 def build_feed(path: str) -> None:
     """Run the config and write tick,p_int to CSV."""
-    cfg = Config(n=N, T=T, seed=SEED, f=F, c=C, tp=TP, sl=SL,
-                 close_mode=CLOSE_MODE, sl_mode=SL_MODE)
+    cfg = Config(n=N, T=T, seed=SEED, f=F, c=C,
+             tp=TP, sl=SL,
+             close_mode=CLOSE_MODE, sl_mode=SL_MODE,
+             x_accounting=X_ACCOUNTING,
+             log_thresholds=LOG_THRESHOLDS,
+             symmetric_solvency=SYMMETRIC_SOLVENCY,
+             entry_mode=ENTRY_MODE,
+             hold_fires_close=HOLD_FIRES_CLOSE)
     print(cfg.summary())
     sim = Simulation(cfg, recorder=Recorder(), run_checks=RUN_CHECKS).run()
     tick = sim.recorder.series("tick")
@@ -112,22 +130,14 @@ def main() -> None:
 
 
 def _plot(D, NDC, OS, E_N, C_N, R_N, E_os, C_os, R_os, ratio, sd, n_t) -> None:
-    # the engine line: every figure names its arm (the 4x silent-default lesson)
-    ENGINE = (f"close={CLOSE_MODE} entry={globals().get('ENTRY_MODE','ioc')} "
-              f"impatience={globals().get('HOLD_FIRES_CLOSE', False)}")
-
     import matplotlib
     if not SHOW:
         matplotlib.use("Agg")
-    # the engine line: every figure names its arm (the 4x silent-default lesson)
-    ENGINE = (f"close={CLOSE_MODE} entry={globals().get('ENTRY_MODE','ioc')} "
-              f"impatience={globals().get('HOLD_FIRES_CLOSE', False)}")
-
     import matplotlib.pyplot as plt
 
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(12.5, 5.2))
     fig.suptitle(f"Intrinsic-time scaling laws  |  n={N}, T={T:,}, seed={SEED}, c={C}, "
-                 f"tp={TP} sl={SL}  |  {ENGINE}  |  tick sd(r)={sd:.3g}",
+                 f"tp={TP} sl={SL} close={CLOSE_MODE}  |  tick sd(r)={sd:.3g}",
                  fontsize=11, fontweight="bold")
     xs = np.array([D.min(), D.max()])
 
