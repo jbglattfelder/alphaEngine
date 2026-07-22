@@ -17,30 +17,48 @@ state and orientation; read that for the tables.
 explained, but because the null model has done its job: it now says, with a
 mechanism attached, exactly which market phenomena *require* level 1.
 
-Scorecard of the bare mechanism:
+> **THERE ARE TWO DEFAULT-ISH ARMS, AND MOST CLAIMS ARE ARM-CONDITIONAL.**
+> `config.py` defaults `entry_mode="ioc"` (the batch hybrid), but **`run_single.py`
+> ships `entry_mode="rest"` + `hold_fires_close=True`** — the pure-CLOB impatience
+> engine — at **n=500, tp=0.01, sl=0.02**. So the dashboard a person sees by
+> default is the CLOB arm, *not* the batch arm the older prose describes. Every
+> scorecard row below now names which arm it holds on. The two arms differ on the
+> headline results (compact support, fat tails, the price's stability), so
+> "the null model does X" is ambiguous until the arm is stated.
+
+Scorecard of the bare mechanism (**batch** = ioc/home; **CLOB** = rest+impatience):
 
 | Stylized fact | Result |
 |---|---|
 | Unpredictability, ACF(r) ≈ 0 | **PASS** (n=500: +0.01) — for the opposite reason to a real market |
 | DC count N(δ) ~ δ⁻² | **PASS** at n=150 across seeds/engines/sl; **moves at n=500** (§4.3) |
 | Volatility clustering (physical time) | **FAIL** — but see the intrinsic-time duration result (§5.2) |
-| Fat tails | **FAIL under homogeneous bands — reachable at "level 0.5"** (§5.1) |
-| ⟨ω⟩ = δ (overshoot law) | **FAIL** — not even a power law; needs the actor |
+| Fat tails (**batch**) | **absent** — P(\|r\|>4sd)=0 exactly (§4.5) |
+| Fat tails (**CLOB, default**) | **PRESENT** — genuine, drift-independent, 2 seeds: P(\|r\|>4sd) ≈ 0.5% (sl=tp) to 1.2% (sl=2tp) (§5.4) |
+| Fat tails (**batch + level-0.5 roundness**) | **PRESENT** — P(\|r\|>4sd) ≈ 2.1% (§5.1) |
+| ⟨ω⟩ = δ (overshoot law) | **FAIL as a mean** (mean is drift-inflated); **median-ω/δ ≈ 0.7 ≈ BM** on both arms (§4.4) |
+| Price direction (**CLOB**) | **UNSTABLE** — symmetry-breaking, not a drift; runs away up *or* down, direction noise-seeded (§4.9) |
 
 The unpredictability pass carries an asterisk: a real market is unpredictable
 because information is incorporated and arbitrage scrubs the residue; ours is
 unpredictable because **there is nothing to predict**. The engine achieves *the
 signature of efficiency without the mechanism of efficiency*.
 
-**Five independent arguments now converge on one conclusion — what is missing is
-not a parameter, it is an actor:**
+**Four independent arguments converge on one conclusion — what is missing is not a
+parameter, it is an actor:**
 
-1. Fat tails need a mixture of depth scales (§5.1) — geometry, not a knob.
-2. ⟨ω⟩=δ needs depth that survives a price move (§4.4).
-3. A pure CLOB cannot form a price with taker-only agents — no spread (§4.6).
-4. A pure CLOB deadlocks two ways; only a both-sides maker fixes the "side" half
-   (§4.7).
-5. The overshoot law's remnant dies under every depth *geometry* tried (§5.1).
+1. ⟨ω⟩=δ (as a mean law) needs depth that survives a price move (§4.4).
+2. A pure CLOB cannot form a price with taker-only agents — no spread (§4.6).
+3. A pure CLOB deadlocks two ways; only a both-sides maker fixes the "side" half,
+   and the price is directionally *unstable* — nothing pins it (§4.7, §4.9).
+4. The overshoot law's remnant dies under every depth *geometry* tried (§5.1);
+   and no symmetric knob stabilises the price-direction (§4.9, whack-a-mole).
+
+**Fat tails are NO LONGER on this list** — the CLOB arm produces them for free
+(§5.4), and the roundness hierarchy produces them at level 0.5 (§5.1). Fat tails
+are *reachable* at level 0; they are not evidence for the actor. (This is a
+correction: the earlier draft listed "fat tails need a mixture of depth scales"
+as an actor-argument. Measurement overturned it.)
 
 > **The one-sentence root cause.** *In this market, liquidity is other agents'
 > unrealized profit.* Every resting order is a take-profit; a take-profit exists
@@ -171,7 +189,8 @@ ways** (lattice, volatility, excursion) unless `tp·√T` is held constant.
 
 `q` = fraction of steps continuing direction (BM = 0.5 at all scales). Measured
 n=150: q(m=1) ≈ 0.70, decaying to ≈ 0.46 by m≈32. **SLs are the momentum**
-(`sl_enabled=False` → q=0.516, BM-like); tightening sl raises q, widening lowers
+(`sl_enabled=False` → q≈0.36 at tp=sl=0.01, ioc — *anti*-persistent, not BM-like;
+an earlier "0.516" was a different config); tightening sl raises q, widening lowers
 it — monotone, brackets 0.5. **But q=0.5 is not tunable in any transferable way**:
 `sl=2·tp` fixes n=150 and over-corrects at n=500 (momentum already diluted by
 m=2). q is a function of scale *and* n, and — critically — **path-conditional**:
@@ -188,25 +207,44 @@ n=150: E_N ≈ −2 ± 0.2 across seven configurations (both engines, both sl, s
 tethered, so it has fewer large excursions to count); the n-dependence itself is
 **UNEXPLAINED**. Do not state "DCs are stable" without this caveat.
 
-### 4.4 Overshoot law ⟨ω⟩ = δ — DOES NOT HOLD, and is not a power law
+### 4.4 Overshoot law ⟨ω⟩ = δ — the MEAN is drift-inflated; the MEDIAN ≈ BM
 
-**Retire every E_os number.** ⟨ω⟩(δ) is non-monotone (quantity arm R²=0.041 — a
-line fitted to a hump). The instrument is not at fault (BM 12-seed: E_os = 1.005
-± 0.056). What governs the *level* is q at the δ scale (§4.2). The apparent
-"hump" may be substantially noise at large δ (rise rests on 12–24 events);
-re-measure with enough events before treating the peak as real. A finite-range
-explanation was tested and does **not** hold (max usable δ is 14% of the range).
+**The mean ⟨ω⟩/δ is not a clean liquidity read on a trending price** — a few long
+one-directional runs inflate it. Measured mean/δ ranges from ~1 (batch hump) to 8
+(CLOB sl=2tp) to 4.66 to 3.79 across arms/seeds; **none of these are the liquidity
+signal.** The tell: on BM, mean/δ ≈ 1.0 but **median/δ ≈ 0.70** (overshoots are
+right-skewed even for BM, so mean/median ≈ 1.5 is the healthy baseline). Across
+*every* engine arm measured, **median-ω/δ sits at ~0.6–0.9 ≈ the BM value**, while
+the mean balloons — i.e. mean/median ≫ 1.5 signals the price TRENDS, not that it
+is illiquid. `dc_analysis.measure` now returns `os_median`; `scaling_law.py` plots
+both series and prints mean/median. **Use the median; the mean law is a
+driftometer.**
 
-### 4.5 Compact support & the quantity-arm tether
+Consequences: retire every fitted `E_os` (a slope on a drift-inflated mean means
+nothing); the "hump" seen earlier was a mean artifact at δ where events are sparse
+(12–24). A clean-looking mean power law (e.g. the sl=tp CLOB run, ⟨ω⟩/δ=1.38
+R²=0.996) is *lower-drift*, not necessarily *more BM-like* — check its median. A
+finite-range explanation was tested and does **not** hold (max usable δ is 14% of
+the range). The **mean** overshoot law is FAIL; the **median** is BM-like on both
+arms — the honest statement is "the typical overshoot is normal; the mean reports
+the ratchet."
 
-**Fat tails are structurally absent under homogeneous bands.** Measured:
-`P(|r|>4sd) = exactly zero`, `|step|>2·tp` = 0.0–0.2% at every inventory level,
-c, and n. Because agents enter at the current price, TPs always rest one band
-away — the price is permanently walled in, so **the engine makes excursions but
-never jumps** (the home-arm runaway travels ~14 e-folds in thousands of tp-sized
-steps). This does **not** explain the overshoot law: the home arm has compact
-support *and* ⟨ω⟩/δ = 3.3e6 in the same run. Tails = single-step size;
-overshoots = runs of steps. Separate questions. *(Broken at level 0.5 — §5.1.)*
+### 4.5 Compact support (BATCH arm only) & the quantity-arm tether
+
+**Compact support is a property of the BATCH (ioc) entry mechanism, NOT of "the
+mechanism."** On the batch arm: `P(|r|>4sd) = exactly zero`, `|step|>2·tp` =
+0.0–0.2% at every inventory level, c, and n. Because balanced entry flow nets at
+`p_prev` and only the imbalance walks the book against TPs one band away, the price
+is walled in — **the batch engine makes excursions but never jumps** (the runaway
+travels ~14 e-folds in thousands of tp-sized steps). **This breaks on the CLOB
+(rest) arm** — marketable-to-touch entries walk the book directly and produce
+genuine large steps (§5.4). So "excursions but never jumps" is an **ioc** claim,
+now known to be arm-specific.
+
+Compact support (where it holds) does **not** explain the overshoot law: the batch
+home arm has compact support *and* a large mean ⟨ω⟩/δ in the same run. Tails =
+single-step size; overshoots = runs of steps. Separate questions. *(Broken by
+level-0.5 roundness, §5.1; and by the CLOB entry mechanism, §5.4.)*
 
 **The quantity arm is tethered** (sub-diffusive, not confined — corrected from an
 earlier single-seed "range-invariant" claim): its price range grows ~1.2× for 4×
@@ -217,7 +255,8 @@ drift is the cover mechanics": the cover flow is what pins the level.
 
 ### 4.6 The batch auction is the price-formation mechanism, not a scaffold
 
-~47% of entry flow self-crosses at `p_prev` and never touches the book; only the
+~60% of entry BTC flow self-crosses at `p_prev` and never touches the book (measured
+n=500 ioc: 61% balanced / 39% imbalance; an earlier "47%" was a different config); only the
 net imbalance moves the price. **This is not onboarding — it is load-bearing every
 tick.** Tested by removing it: a pure CLOB with entries resting at `p_prev` pins
 the price (every entry wants the same price → instant cross → no spread → no
@@ -268,12 +307,59 @@ the super-linear overshoot concentrates in the *flush* phase, build is near-BM.
 ### 4.8 The n=2 limit — the mechanism naked
 
 `n=2, home, c=0.004, tp=sl=0.01, seed 1, T=100k` → p_final = 8.678493, 329 clears
-(bit-reproducible fixture). 84.5% up-steps; sum of log-steps = ln p_final exactly;
-the two longs ratchet the price up by serially filling each other's TPs. Closes
-the population sweep: n=2 → 84.5%-up ratchet, n=150 → ACF(r)=+0.17, n=500 → ~0.01.
+(bit-reproducible fixture). **REQUIRES `hold_fires_close=False`** — this fixture
+was recorded on the pre-impatience engine; under the current default
+(`hold_fires_close=True`) the same config gives p_final=0.439. State the flag or
+the number is a lie. 84.5% up-steps; sum of log-steps = ln p_final exactly; the
+two longs ratchet the price up by serially filling each other's TPs. Closes the
+population sweep: n=2 → 84.5%-up ratchet, n=150 → ACF(r)=+0.17, n=500 → ~0.01.
 **Symmetry is a large-n property, not a property of the mechanism** — the "5:1
-tribe asymmetry at n=2" is the same "symmetric" home engine. State symmetry as a
-large-n claim wherever it appears.
+tribe asymmetry at n=2" is the same "symmetric" home engine.
+
+### 4.9 The CLOB price is a SYMMETRY-BREAKING INSTABILITY, not a drift (NEW)
+
+**"Prices always fall" is RETRACTED.** It was a two-seed artifact. Same config
+(n=500, tp=0.01, sl=0.02, rest+impatience): seeds 1 and 42 ran *down* (p→0.03),
+but another seed ran *up* (p→~10–20, peaking near 20) — all checks pass, all
+conserve. **Both directions occur under identical rules, so the direction is not
+structural.** The price starts at x_0, wanders quietly, then breaks one way and
+runs away — a pencil on its tip. The correct statement: the CLOB price is
+**unpinned in level AND unstable in direction** (strictly stronger than the old
+zero-mode result), with the direction seeded by early noise and locked in by
+feedback.
+
+**The feedback, measured by drift decomposition** (`exp_drift_decomp.py`, which
+tags every price-moving order by direction × tribe × role and sums signed Δln p;
+attribution is exact — the category sums reconstruct the total ln-drift). Full
+150k, seed 42, sl=2tp, the run went down and: by role, **SL covers = −243.5**
+(the amplifier), entries a near-perfect wash (+223 gross both sides, net ≈ 0),
+impatience +16. Within SL: long-covers (sell) net −307 on 30k events, short-covers
+(buy) net +78 on 48k — long-covers hit ~6× harder per event.
+
+**But the asymmetry is EMERGENT, not structural** (the key control, binning
+per-event SL impact by time-quarter as the price falls):
+
+| quarter | lnp | Lstop/evt | Sstop/evt | ratio |
+|---|---|---|---|---|
+| 1 (early) | −1.11 | −0.0067 | +0.0060 | **1.1** |
+| 4 (late) | −3.25 | −0.0097 | +0.0024 | **4.1** |
+
+Early, the stops are **symmetric** (ratio 1.1); the 6× asymmetry *grows as the
+price falls*. So it is the depth-dies-with-the-move feedback (a falling price thins
+the down-side depth, so long-covers walk further, which thins it more), and it
+only picks a direction once noise breaks the symmetry. In an up-run the mirror
+holds (short-covers become the amplifier; open positions are mostly *shorts*).
+
+**Whack-a-mole (why no symmetric knob restores it):** at sl=tp the SL net *flips
+positive* (+16.7) but *impatience* takes over as the down-driver (−21.4) — the
+price still runs. The instability regenerates in whatever close-channel is not
+pinned, because every close-channel is reactive to the price it moves through.
+Restoring symmetry needs *restoring depth* (an unconditional maker), not a knob;
+"flipping" needs a designed bias. For a **null** model the finding is that
+direction is a free, unstable degree of freedom — not that any direction is
+achievable. **Open confirmation: a ≥10-seed sign tally at n=500 to distinguish
+pure 5/5 instability from a small residual bias + amplifier.** (Current: down,
+down, up on 3 seeds — consistent with ~50/50, underpowered.)
 
 ---
 
@@ -318,7 +404,39 @@ quadratic-mean (0809) for the bridge — do not "fix" it; (2) δ floor ≥ 8× t
 covariant), "relative" reproduces the papers — the log gauge does *not* fix the
 runaway, it makes 3.3e6 legible as ~100; (4) **kurtosis is the wrong instrument
 for tails** — it conflated peakedness with tail weight and said "fat tails" while
-the tail was exactly zero. Measure P(|r|>k·sd) directly.
+the tail was exactly zero. Measure P(|r|>k·sd) directly; (5) **on a trending arm,
+P(|r|>k·sd) and constant-mean-detrend BOTH lie** — subtracting a constant from a
+trending-then-reverting series manufactures fake persistence (raw q1≈0.47 →
+mean-detrended q1≈0.88, an artifact). Use a **local (rolling-median) detrend** and
+read the **residual sign-ACF**: q1→~0.5 means the trend is gone; a tail that
+survives *that* is real. This is what `exp_detrend_tail.py` does, and it is how
+§5.4 was established.
+
+### 5.4 The CLOB entry mechanism is a second route to fat tails (NEW)
+
+The pure-CLOB (rest+impatience) arm has **genuine, drift-independent fat tails** —
+a second level-0 route distinct from the level-0.5 roundness hierarchy (§5.1).
+`exp_detrend_tail.py`, full 150k, **two seeds each**, local-detrend at windows
+25–751:
+
+| arm | seed 1 P(\|r\|>4sd) | seed 42 P(\|r\|>4sd) | residual sign-q1 |
+|---|---|---|---|
+| CLOB, **sl=2tp** | 1.22–1.26e-2 | 1.26–1.30e-2 | ~0.34–0.36 |
+| CLOB, **sl=tp** | 0.43–0.47e-2 | 0.54–0.56e-2 | ~0.42–0.48 |
+
+The tail **survives every local-detrend window** with the residual sign-ACF driven
+to ~0.5 (trend removed), and P(|r|>5sd) ≈ P(|r|>4sd) (a genuinely heavy tail, not a
+fattened Gaussian) — so it is not the ratchet. Mechanism, partially decomposed:
+**the CLOB entry (marketable-to-touch, walking the book) is the baseline (~0.5% at
+sl=tp); the sl=2tp cover cascade roughly DOUBLES it (~1.2%).** Both contribute; they
+add. Caveat: at sl=tp the tail is mildly window-dependent (falls a little as the
+window grows), so ~0.5% is an upper-ish estimate of the truly drift-free tail — the
+sl=2tp tail is cleaner (flat across windows).
+
+**Open: the last attribution cell.** ioc × {sl=tp, sl=2tp}. If ioc stays at exactly
+zero tail regardless of sl, the tail *requires* the CLOB entry and sl only
+amplifies. If ioc at sl=2tp also develops a tail, the wide-stop cascade can make
+tails alone. Cheap; run it before the entry-vs-stop split is stated as final.
 
 ---
 
@@ -350,7 +468,7 @@ it, anything new is *attributable*. The null is the control experiment for the
 whole program; level 0 must close before level 1 opens, or every level-1 result
 is confounded. **It is now closed** (§0).
 
-**Level 1 is an actor, not a parameter** — five independent arguments (§0) point
+**Level 1 is an actor, not a parameter** — four independent arguments (§0) point
 at the same missing piece: a two-sided quoter resting depth *away from* `p_prev`,
 independent of its own P&L.
 
@@ -431,7 +549,15 @@ retracted); tails inventory-limited (peakedness, not tails — the metric said y
 before the phenomenon said no); the overshoot hump is a finite-range artifact
 (unsupported); compact support explains the overshoot law (no); durations thinner
 than BM (falsified, and the yield); quantity-arm range T-invariant (single-seed;
-sub-diffusive, not confined). **All E_os values retired.**
+sub-diffusive, not confined); **"prices always fall" on the CLOB arm** (two-seed
+artifact — an up-run occurs under identical settings; it is a symmetry-breaking
+*instability*, not a drift, §4.9); **"SL covers cause a downward drift"** (wrong
+framing — the rules are symmetric; the SL feedback only amplifies a noise-seeded
+direction, and the asymmetry is emergent not structural, §4.9); **"compact support
+is a mechanism property / the engine never jumps"** (batch-only; the CLOB entry
+makes genuine fat tails, §5.4); **"fat tails need an actor / are unreachable at
+level 0"** (the CLOB arm produces them free, §5.4); **the mean ⟨ω⟩/δ as a liquidity
+read** (drift-inflated; use the median, §4.4). **All E_os values retired.**
 
 ### Standing rules (do not re-break)
 
@@ -487,7 +613,17 @@ any quantity-path number. The x-share ≈ 0.50 band at f=0.5 is the load-bearing
 signal — drift is a free zero-mode and varies wildly by seed, as the spread of
 the drift column shows.)*
 
-Bit-reproducibility guards: `test_benchmarks.py` / `benchmarks.json` (eight+
-engine paths, bit-exact; ioc/batch bit-identical through refreezes), portable-init
-test, BM-control test. `.json`/`.jsonl` files are **run artifacts**, not sources
-of truth — parameters live in `config.py`.
+Bit-reproducibility guards: `test_benchmarks.py` / `benchmarks.json` (10
+benchmarks, bit-exact — verified green on current code this session; ioc/batch
+bit-identical), portable-init test, BM-control test. `.json`/`.jsonl` files are
+**run artifacts**, not sources of truth — parameters live in `config.py`.
+
+Instruments added this session (all validated, all committed-clean):
+`exp_detrend_tail.py` (drift-vs-fat-tails via local detrend + sign-ACF, §5.4);
+`exp_drift_decomp.py` (signed Δln p by aggressor type — who pushes the price, §4.9;
+diagnostic wrapper, bit-neutral); `os_median` in `dc_analysis.measure` +
+mean/median dual series in `scaling_law.py` (§4.4, drift-robust overshoot read);
+`entry_mode` switch in `config.py`/`simulation.py` (batch default bit-identical;
+`clob`/`rest` variants — see §4.6/§4.7). Open runs registered against these:
+ioc×sl 2×2 tail cell (§5.4), ≥10-seed n=500 sign tally (§4.9),
+`exp_oscillator_phase` on the full feed.

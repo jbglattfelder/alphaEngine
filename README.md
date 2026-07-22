@@ -148,15 +148,24 @@ arm.** Full descriptions in `HANDOFF-master.md` §3. In brief:
 
 - **Trading does not redistribute wealth**: ΔGini ≈ 0 over 20 seeds; symmetry fixes
   the shares, conservation only the total.
-- **The price level carries no information** — no anchor, so it wanders.
+- **The price level carries no information** — no anchor. On the **batch** arm it
+  wanders; on the **CLOB** arm (the `run_single` default) it is directionally
+  *unstable* — runs away up or down, direction seeded by noise (a symmetry-breaking
+  instability, not a drift). "Prices always fall" was a two-seed artifact.
 - **The book compresses the capital distribution** (filled ∝ requested^γ, γ from
   ~0.1 thin to ~1 liquid) — the one result not put in by hand.
-- **The price is a lattice walk whose spacing is the TP band** (`sd(r)=0.78·tp`).
-- **The exit mix *is* the dynamics** (q = 0.70 with stops, 0.52 without: SLs are
-  momentum, TPs reversion).
-- **N(δ)~δ⁻² holds; ⟨ω⟩=δ does not; fat tails are unreachable under homogeneous
-  bands but appear at "level 0.5" with a TP-roundness hierarchy.**
-- **Five independent arguments say the missing piece is an actor, not a parameter**
-  — a two-sided quoter (Avellaneda–Stoikov). That is level 1.
+- **The price is a lattice walk whose spacing is the TP band** (`sd(r)=0.78·tp`) —
+  **on the batch arm**; the CLOB entry mechanism escapes the ±2·tp wall.
+- **The exit mix *is* the dynamics** (q ≈ 0.70 with stops, anti-persistent without:
+  SLs are momentum, TPs reversion).
+- **N(δ)~δ⁻² holds. ⟨ω⟩=δ fails as a MEAN (drift-inflated); the median overshoot
+  ≈ BM.** Fat tails: **absent on the batch arm** (P(|r|>4sd)=0 exactly), **present
+  and genuine on the CLOB arm** (~0.5–1.2%, drift-independent, 2 seeds), and present
+  at "level 0.5" with a TP-roundness hierarchy (~2.1%). Fat tails are reachable at
+  level 0 — two routes.
+- **Four independent arguments say the missing piece is an actor, not a parameter**
+  — a two-sided quoter (Avellaneda–Stoikov) to provide a spread, absorb the close
+  channels, and stabilise the price direction. That is level 1. (Fat tails are *not*
+  one of the four — the mechanism gets them free.)
 
-See `HANDOFF-master.md` §0 for the full scorecard and verdict.
+See `HANDOFF-master.md` §0 for the full scorecard and verdict (arm-conditional).

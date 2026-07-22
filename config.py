@@ -46,8 +46,8 @@ class Config:
                                 # baseline split is NOT implemented in the CLOB open_btc; see agents.py)
     W: int = 15                 # VESTIGIAL (CLOB era): entries are IOC and TP limits never expire, so
                                 # nothing in the book ages out. Kept only for config-file compatibility.
-    tp: float = 0.1             # take-profit: close position when its return >= +tp
-    sl: float = 0.1             # stop-loss:   close position when its return <= -sl
+    tp: float = 0.01            # take-profit: close position when its return >= +tp
+    sl: float = 0.01            # stop-loss:   close position when its return <= -sl
     sl_grid: float = 0.0        # >0 = snap SL trigger levels to a LOG grid of this spacing.
                                 # 0 = off (each agent stops at its own entry*e^-sl, so stops are
                                 # SCATTERED and fire one at a time -> no cascade -> thin tails).
@@ -90,7 +90,7 @@ class Config:
                                     #            book-walking cascade, no EUR burn while waiting.
                                     # "wait"   = market cover only when the FULL cover is affordable
                                     #            at the current price; otherwise spend nothing this tick.
-    entry_mode: str = "ioc"         # how ENTRIES meet the market (v5 pure-CLOB switch):
+    entry_mode: str = "rest"         # how ENTRIES meet the market (v5 pure-CLOB switch):
                                     # "ioc"  = current behaviour, bit-identical: balanced entry flow
                                     #          crosses at p_prev impact-free (the auction vestige);
                                     #          the net imbalance walks the book; residuals VANISH.

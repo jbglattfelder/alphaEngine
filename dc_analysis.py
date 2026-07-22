@@ -161,6 +161,7 @@ def measure(prices: np.ndarray, delta: float, T: int, min_events: int = 12,
         "N": N,                       # law (0b): number of directional changes
         "N_hat": N / T,               # eq (28): normalised by physical time
         "os_mean": float(os.mean()),                    # law (9) *=os : <omega> ~= delta
+        "os_median": float(np.median(os)),              # DRIFT-ROBUST: mean >> median => trend, not liquidity
         "os_var2": float(np.mean((os - delta) ** 2)),   # eq (27): <omega-delta>_2 ~ delta^2
         "tm_mean": float(delta + os.mean()),            # law (9) *=tm : ~= 2*delta
         "os_cum": float(os.sum()),                      # law (12) *=os

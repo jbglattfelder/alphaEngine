@@ -23,7 +23,7 @@ F     = 0.5     # initial home fraction
 C     = 0.004   # firing rate (activity); higher = livelier & slower
 
 TP    = 0.01     # take-profit band
-SL    = 0.02     # stop-loss band
+SL    = 0.01     # stop-loss band
 
 CLOSE_MODE = "home"      # "home" = each tribe delivers what it holds (v4 symmetric null)
                          # "quantity" = both tribes re-trade a fixed BTC quantity (v3; stranding)

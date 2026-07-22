@@ -317,12 +317,70 @@ continuously.
 
 ---
 
+# §V — the CLOB arm (rest+impatience): instability, drift, fat tails
+
+The `run_single` default arm (n=500, tp=0.01, sl=0.02, entry=rest,
+hold_fires_close=True, close=home). Detailed records behind HANDOFF-master §4.9
+and §5.4. All runs pass every sanity check; all conserve.
+
+## V.1 Direction is an unstable degree of freedom (not a drift)
+
+Same config, three seeds: p_final = 0.031 (s1), 0.029 (s42), **and ~10–20 (a
+third seed, up-run)**. Both directions under identical rules → not structural. The
+price wanders near x_0 then breaks and runs away (flat-then-break on every seed,
+either sign). "Prices always fall" RETRACTED — two-seed artifact. It is a
+symmetry-breaking instability: unpinned in level *and* unstable in direction.
+
+## V.2 Drift decomposition — who pushes (`exp_drift_decomp.py`)
+
+Exact attribution (category sums = total ln-drift to the digit). Full 150k, s42
+(down), sl=2tp, by role: **SL −243.5**, entry +223.5 (near-perfect wash, net/gross
+≈ 0.98 each side), impatience +16.4. SL detail: long-cover (sell) net −307 / 30k
+events; short-cover (buy) net +78 / 48k — long-covers ~6× harder per event.
+
+**Emergent, not structural** — per-event SL impact by time-quarter as price falls:
+ratio |L/S| = 1.1 (early) → 4.1 (late). Stops start *symmetric*; the asymmetry
+grows with the fall. Depth-dies-with-the-move feedback amplifies a noise-seeded
+break. Whack-a-mole: at sl=tp the SL net flips +16.7 but impatience takes over
+(−21.4) — no symmetric knob restores it (the instability regenerates in the
+unpinned channel). Confirmation pending: ≥10-seed sign tally.
+
+## V.3 Genuine drift-independent fat tails (`exp_detrend_tail.py`)
+
+Two seeds each, full 150k, local rolling-median detrend (windows 25–751), tail
+survives with residual sign-ACF → ~0.5:
+
+| arm | s1 P(\|r\|>4sd) | s42 P(\|r\|>4sd) | resid q1 |
+|---|---|---|---|
+| sl=2tp | 1.22–1.26e-2 | 1.26–1.30e-2 | 0.34–0.36 |
+| sl=tp  | 0.43–0.47e-2 | 0.54–0.56e-2 | 0.42–0.48 |
+
+P(|r|>5sd) ≈ P(|r|>4sd) (heavy, not fattened-Gaussian). Second route to fat tails,
+distinct from §T's roundness hierarchy. Mechanism partially split: CLOB entry
+(marketable-to-touch) is the ~0.5% baseline; sl=2tp cover cascade ~doubles it to
+~1.2%. **Method note that flipped the earlier read:** constant-mean detrend
+manufactures fake persistence on a trending-then-reverting series (raw q1≈0.47 →
+0.88); only the *local* detrend is trustworthy. Open: ioc×{sl,2tp} tail cell to
+finish the entry-vs-stop attribution.
+
+## V.4 Overshoot: mean is drift, median is BM (`os_median`)
+
+Across arms the mean ⟨ω⟩/δ runs 1–8; the **median-ω/δ sits at ~0.6–0.9 ≈ BM's
+0.70** everywhere. BM baseline mean/median ≈ 1.5; the engine's mean/median ≫ 1.5
+is the trend, not illiquidity. sl=tp CLOB gives a clean-looking mean law
+(⟨ω⟩/δ=1.38, R²=0.996) but that is *lower drift*, not more BM-like — its median is
+the check. Retire fitted E_os; report the median.
+
+---
+
 ## Files & artifacts
 
 Experiments (predictions in headers): `exp_tpcluster.py`, `exp_nopen.py`,
 `exp_durations.py`, `exp_stranding.py`, `exp_inventory.py`,
-`exp_oscillator_phase.py` (registered, awaiting the full-feed run).
+`exp_oscillator_phase.py` (registered), `exp_detrend_tail.py` (§V.3),
+`exp_drift_decomp.py` (§V.2).
 Artifacts: `tpcluster.jsonl`, `nopen.jsonl`, `stranding_*` JSON (base 1–10,
 legacy, mirror; `stranding_v2/`, `_v3/`, `_v4/`), `stranding_seeds.jsonl`.
-Instrument + guards: `dc_analysis.py`, `test_benchmarks.py` / `benchmarks.json`,
+Instrument + guards: `dc_analysis.py` (now with `os_median`),
+`test_benchmarks.py` / `benchmarks.json` (10 benchmarks, green this session),
 `test_bm.py`, portable-init test.

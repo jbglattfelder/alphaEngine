@@ -40,7 +40,7 @@ F     = 0.5     # initial home fraction
 C     = 0.004   # firing rate (activity); higher = livelier & slower
 
 TP    = 0.01     # take-profit band
-SL    = 0.02     # stop-loss band
+SL    = 0.01     # stop-loss band
 
 CLOSE_MODE = "home"      # "home" = each tribe delivers what it holds (v4 symmetric null)
                          # "quantity" = both tribes re-trade a fixed BTC quantity (v3; stranding)
@@ -111,25 +111,30 @@ def main() -> None:
 
     D = np.array([r["delta"] for r in rows])
     NDC = np.array([r["N"] for r in rows], float)
-    OS = np.array([r["os_mean"] for r in rows])
+    OS  = np.array([r["os_mean"] for r in rows])
+    OSM = np.array([r["os_median"] for r in rows])
 
     E_N, C_N, R_N = fit(D, NDC)
     E_os, C_os, R_os = fit(D, OS)
-    ratio = float(np.mean(OS / D))
+    ratio  = float(np.mean(OS / D))
+    ratio_med = float(np.mean(OSM / D))
 
     print(f"\nfeed {n_t:,} ticks | tick sd(r) = {sd:.4g} (sd/tp = {sd/TP:.2f})")
     print(f"delta grid {D[0]*100:.2f}% .. {D[-1]*100:.2f}%  "
           f"({len(rows)} usable, {dropped} dropped for <{MIN_EVENTS} events)")
     print(f"  N(delta)      ~ delta^{E_N:+.3f}   (adj R2 {R_N:.4f})   [BM ~ -1.85, theory -2]")
     print(f"  <omega(delta)>~ delta^{E_os:+.3f}  (adj R2 {R_os:.4f})  [BM ~ +1.00, theory +1]")
-    print(f"  <omega>/delta = {ratio:.3f}                            [BM ~ 1.00]")
+    mm = ratio/ratio_med if ratio_med else float("nan")
+    print(f"  <omega>/delta        = {ratio:.3f}   (MEAN; theory/BM ~ 1.0)")
+    print(f"  median-omega/delta   = {ratio_med:.3f}   (MEDIAN; BM baseline ~ 0.70 -- overshoots are right-skewed even for BM)")
+    print(f"  mean/median          = {mm:.2f}   (BM ~ 1.5. >> 1.5 => the price TRENDS: the mean law is drift-inflated, not liquidity)")
     print(f"     {'<1: overshoots die early -> anti-persistent / MORE liquid than BM' if ratio < 0.95 else ''}"
           f"{'>1: overshoots run -> trending / LESS liquid than BM' if ratio > 1.05 else ''}")
 
-    _plot(D, NDC, OS, E_N, C_N, R_N, E_os, C_os, R_os, ratio, sd, n_t)
+    _plot(D, NDC, OS, OSM, E_N, C_N, R_N, E_os, C_os, R_os, ratio, ratio_med, sd, n_t)
 
 
-def _plot(D, NDC, OS, E_N, C_N, R_N, E_os, C_os, R_os, ratio, sd, n_t) -> None:
+def _plot(D, NDC, OS, OSM, E_N, C_N, R_N, E_os, C_os, R_os, ratio, ratio_med, sd, n_t) -> None:
     import matplotlib
     if not SHOW:
         matplotlib.use("Agg")
@@ -153,14 +158,16 @@ def _plot(D, NDC, OS, E_N, C_N, R_N, E_os, C_os, R_os, ratio, sd, n_t) -> None:
     a1.legend(fontsize=8); a1.grid(True, which="both", ls=":", alpha=0.4)
 
     # RIGHT: mean overshoot -- the liquidity component
-    a2.loglog(D, OS, "o", ms=6, color="#15803D", label="measured")
+    a2.loglog(D, OS, "o", ms=6, color="#15803D", label=f"mean  (⟨ω⟩/δ={ratio:.2f})")
+    a2.loglog(D, OSM, "s", ms=5, color="#2563EB", mfc="none",
+              label=f"median  (/δ={ratio_med:.2f}, drift-robust)")
     a2.loglog(xs, (xs / C_os) ** E_os, "-", color="#B45309", lw=1.6,
-              label=f"fit: E = {E_os:.3f}  (R²={R_os:.3f})")
+              label=f"mean fit: E = {E_os:.3f}  (R²={R_os:.3f})")
     a2.loglog(xs, xs, ":", color="#6B7280", lw=1.4, label="theory: ⟨ω⟩ = δ  (BM/FX)")
     a2.set_xlabel("directional-change threshold  δ")
     a2.set_ylabel("⟨ω(δ)⟩   mean overshoot")
-    a2.set_title(f"Law (9,os): mean overshoot  →  LIQUIDITY   "
-                 f"(⟨ω⟩/δ = {ratio:.2f})", fontsize=10)
+    a2.set_title(f"Law (9,os): overshoot  →  LIQUIDITY   "
+                 f"(mean/δ={ratio:.2f}  median/δ={ratio_med:.2f})", fontsize=9)
     a2.legend(fontsize=8); a2.grid(True, which="both", ls=":", alpha=0.4)
 
     fig.tight_layout(rect=(0, 0, 1, 0.93))
