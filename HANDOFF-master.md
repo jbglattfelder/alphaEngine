@@ -396,11 +396,27 @@ pinned, because every close-channel is reactive to the price it moves through.
 Restoring symmetry needs *restoring depth* (an unconditional maker), not a knob;
 "flipping" needs a designed bias. For a **null** model the finding is that
 direction is a free, unstable degree of freedom — not that any direction is
-achievable. **Open confirmation: a ≥10-seed sign tally at n=500 to distinguish
-pure 5/5 instability from a small residual bias + amplifier.** (Current tally, pooling
-arms: sl=2tp — down, down, up; sl=tp — down (seed 1), down (seed 42). 4 down /
-1 up, mixed sl arms, underpowered; a residual down-bias is not excluded and the
-tally must be run per-arm.)
+achievable. **The ≥10-seed per-arm tally RAN (exp_direction_tally.py, canonical arm
+n=500/tp=sl=0.01/T=20k, seeds 1–10): 8 DOWN / 2 UP, two-sided fair-coin
+p = 0.109.** The duality null (50/50) is NOT rejected; the down-lean persists
+but is unproven at this power. The registered channel fingerprint, corrected
+mid-run (a channel's net cannot "flip sign with direction" — the sign is baked
+into the BUY/SELL tag; read PAIRED channel sums instead), found structure the
+naive version could not: **entries are net-UP in every run (+14.9 mean in down
+runs, +12.2 in up runs) and closes are net-DOWN in every run (−17.3, −11.1).**
+Neither pair flips. The direction is not an agnostic amplifier picking a
+noise-seeded side — it is a **standing tug-of-war** between a persistent
+entry-side up-force and a persistent close-side down-force; the run's direction
+is their near-cancelling residual. This revises the "asymmetry is emergent"
+reading: the *feedback growth* is emergent (the quarter-binned table stands),
+but a structural signed pair underlies it. Anatomy of the up-force: long
+entries out-push short entries in gross (BUY|L|entry 172 vs SELL|S|entry 157 in
+down runs; same ordering in up runs) — precisely where the BTC-denomination
+weld lives (a long entry's BTC size carries /px; a short's does not). **Next,
+with a named target: the book-mirror (EUR-denominated book) — registered
+prediction: the tug-of-war's signs invert; corollary, the 8/2 lean inverts if
+the lean is real.** Prior mixed-arm tally (sl=2tp: down, down, up; probes:
+tp=2sl down) is kept for the record but not pooled. Artifact: tally.jsonl.
 
 ---
 
