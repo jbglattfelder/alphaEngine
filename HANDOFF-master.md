@@ -312,7 +312,14 @@ that keeps it alive). Two absorbing classes:
   at n=2 the market died in the state {2 shorts holding→BUY, 2 longs flat→BUY} —
   four buyers, zero sellers, forever. **No within-population rule fixes this**;
   aggression needs an opposite resting order. Combinatorially negligible at
-  n=150, guaranteed at small n.
+  n=150, guaranteed at small n — **REPLICATED**: seed 1 (sl=2tp, died ~19k) and
+  seed 42 (sl=tp, died ~20k; price parked at 1.0729 for 80k green-checked
+  ticks; the two eternal "bids" in its depth panel are the flat longs' resting
+  entries quoting into the void — standing demand, absent supply; its short
+  x̄ = −2.281 is the death-by-installments signature recurring in the CLOB
+  era). Two seeds, two band arms: a property, not an anecdote. Every
+  conservation/solvency check green throughout — correctness invariants and
+  *liveness* are orthogonal, which is exactly the gap the maker fills.
 
 **The liveness statement.** Impatience buys unconditional *timing* but not
 unconditional *side*. Class 2 is provably fixable only by a participant always on
