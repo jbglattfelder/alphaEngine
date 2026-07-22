@@ -44,10 +44,21 @@ These absorb the former `CLAUDE.md`, `DIRECTION.md`, `REFERENCE.md`, all
 
 **There are only three mechanisms: open, take profit, stop out.** The only passive
 depth is TP limits — so *liquidity is other agents' unrealized profit*, and that
-single fact drives most of the findings. One tick (ioc default): accumulate
-pressure → rest TPs / arm SLs → check SL triggers → gather entries → cross the flow
-(balanced buys and sells net at the last price with no impact; only the **net
-imbalance** walks the book) → settle → bankruptcy → record.
+single fact drives most of the findings.
+
+One tick, **default arm (`entry_mode="rest"`, the pure CLOB shipped by
+`run_single`):** accumulate pressure → rest TPs / arm SLs → **SL closes fire as
+market orders that walk the book** → firing agents submit **marketable-to-touch
+entries that fill what crosses and REST the remainder** (a flat agent re-firing
+cancels-and-replaces its resting entry at the live price) → settle → bankruptcy →
+record. There is **no balanced-flow auction on this arm** — every entry meets the
+book directly.
+
+One tick, **`entry_mode="ioc"` (the batch hybrid, `config.py`'s bare default):**
+same up to entries, then balanced buy/sell flow **nets at the last price with no
+impact** and only the **net imbalance** walks the book. This is the arm the older
+scaling-law / compact-support results were measured on; it is *not* what
+`run_single` runs.
 
 Money conservation and PnL zero-sum are asserted every tick. Runs are bit-identical
 across machines (`decimal` + `math.fsum` in the capital draw; the model is chaotic).
@@ -154,15 +165,17 @@ arm.** Full descriptions in `HANDOFF-master.md` §3. In brief:
   instability, not a drift). "Prices always fall" was a two-seed artifact.
 - **The book compresses the capital distribution** (filled ∝ requested^γ, γ from
   ~0.1 thin to ~1 liquid) — the one result not put in by hand.
-- **The price is a lattice walk whose spacing is the TP band** (`sd(r)=0.78·tp`) —
-  **on the batch arm**; the CLOB entry mechanism escapes the ±2·tp wall.
+- **The price's modal step is the TP band** (`sd(r)≈0.78·tp`, median|step|=tp on
+  both arms); but the ±2·tp *wall* (compact support) is **batch-only** — the CLOB
+  entry mechanism jumps past it (§5.4).
 - **The exit mix *is* the dynamics** (q ≈ 0.70 with stops, anti-persistent without:
   SLs are momentum, TPs reversion).
-- **N(δ)~δ⁻² holds. ⟨ω⟩=δ fails as a MEAN (drift-inflated); the median overshoot
-  ≈ BM.** Fat tails: **absent on the batch arm** (P(|r|>4sd)=0 exactly), **present
-  and genuine on the CLOB arm** (~0.5–1.2%, drift-independent, 2 seeds), and present
-  at "level 0.5" with a TP-roundness hierarchy (~2.1%). Fat tails are reachable at
-  level 0 — two routes.
+- **N(δ)~δ⁻² is arm-conditional: E_N ≈ −2 on batch n=150, but ≈ −1.6 on the CLOB
+  default** (the trending price over-counts large excursions). ⟨ω⟩=δ fails as a MEAN
+  (drift-inflated); the median overshoot ≈ BM. Fat tails: **absent on batch**
+  (P(|r|>4sd)=0), **present and genuine on the CLOB default** (~0.5–1.2%,
+  drift-independent, 2 seeds), and present at "level 0.5" with a TP-roundness
+  hierarchy (~2.1%). Fat tails are reachable at level 0 — two routes.
 - **Four independent arguments say the missing piece is an actor, not a parameter**
   — a two-sided quoter (Avellaneda–Stoikov) to provide a spread, absorb the close
   channels, and stabilise the price direction. That is level 1. (Fat tails are *not*

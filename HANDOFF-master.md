@@ -31,7 +31,7 @@ Scorecard of the bare mechanism (**batch** = ioc/home; **CLOB** = rest+impatienc
 | Stylized fact | Result |
 |---|---|
 | Unpredictability, ACF(r) ≈ 0 | **PASS** (n=500: +0.01) — for the opposite reason to a real market |
-| DC count N(δ) ~ δ⁻² | **PASS** at n=150 across seeds/engines/sl; **moves at n=500** (§4.3) |
+| DC count N(δ) ~ δ⁻² | **batch n=150: E_N ≈ −2**; **CLOB default: E_N ≈ −1.6, NOT −2** (§4.3); moves with n/close_mode |
 | Volatility clustering (physical time) | **FAIL** — but see the intrinsic-time duration result (§5.2) |
 | Fat tails (**batch**) | **absent** — P(\|r\|>4sd)=0 exactly (§4.5) |
 | Fat tails (**CLOB, default**) | **PRESENT** — genuine, drift-independent, 2 seeds: P(\|r\|>4sd) ≈ 0.5% (sl=tp) to 1.2% (sl=2tp) (§5.4) |
@@ -107,13 +107,23 @@ book can only ever hold winning positions.** (This is a property of a *CLOB*; in
 wholesale FX both order types are conditional market orders given to a dealer, so
 the feedback *sign* transfers but the liquidity consequence does not.)
 
-### The tick loop (ioc/batch default)
+### The tick loop — two paths, and the shipped default is `rest`
 
-pressure → rest TPs / arm SLs → check SL triggers → gather entries → **entry
-auction** (balanced flow nets at `p_prev`, impact-free; only the *net* imbalance
-walks the book) → settle → bankruptcy → record. Conservation and zero-sum are
-asserted each tick. Runs are bit-identical across machines (the capital draw uses
-`decimal` + `math.fsum`; the model is chaotic — one bit rewrites a run).
+**`rest` (the `run_single` default, pure CLOB):** pressure → rest TPs / arm SLs →
+SL closes fire as **market orders walking the book** → firing agents submit
+**marketable-to-touch entries** (fill what crosses, rest the remainder;
+cancel-and-replace on re-fire) → settle → bankruptcy → record. **No balanced-flow
+auction** — entries meet the book directly (`_step_rest`).
+
+**`ioc` (the `config.py` bare default, batch hybrid):** same up to entries, then an
+**entry auction** — balanced flow nets at `p_prev` impact-free; only the *net*
+imbalance walks the book. **The scaling-law, compact-support, and lattice results
+in §4 were mostly measured on THIS arm, not the shipped default** — see the
+per-claim arm tags.
+
+Conservation and zero-sum are asserted each tick. Runs are bit-identical across
+machines (the capital draw uses `decimal` + `math.fsum`; the model is chaotic —
+one bit rewrites a run).
 
 ---
 
@@ -177,13 +187,17 @@ Engine defaults unless noted: `x_accounting=True`, `log_thresholds=True`,
 `symmetric_solvency=True`, `close_mode="home"`, `f=0.5`, `c=0.004`. All runs pass
 conservation + solvency unless stated.
 
-### 4.1 The lattice — SOLID (8× tp range, all n)
+### 4.1 The lattice — the MODAL band is tp on both arms; the WALL is batch-only
 
-The price is a **lattice walk whose spacing is `tp`**: `sd(r) = 0.78·tp` and
-`median|log-step| = tp` **exactly** across tp ∈ {0.005…0.04}. Fraction landing
-on one band: n=2 → 98.7%, n=150 → 48.7% (the mode never leaves the band). A δ
-grid pinned to tick-sd holds δ/tp fixed, so **any tp-sweep is confounded three
-ways** (lattice, volatility, excursion) unless `tp·√T` is held constant.
+The price's **modal step is the tp band on both arms**: `sd(r) ≈ 0.78·tp` and
+`median|log-step| = tp` **exactly** across tp ∈ {0.005…0.04} (measured, ioc *and*
+rest). Fraction landing on one band: n=2 → 98.7%, n=150 → 48.7% (the mode never
+leaves the band). **But "the price is walled in at ±2·tp" is a BATCH claim only** —
+on the CLOB arm, 5–11% of steps exceed 2·tp (the fat tail, §5.4), so the median is
+tp while the tail is heavy. So: lattice *spacing* = tp (general); compact *support*
+(no steps past ~2·tp) = batch-only. A δ grid pinned to tick-sd holds δ/tp fixed, so
+**any tp-sweep is confounded three ways** (lattice, volatility, excursion) unless
+`tp·√T` is held constant.
 
 ### 4.2 `q`, continuation probability — the exit mix, scale-dependent
 
@@ -199,13 +213,20 @@ table's *levels* are therefore entangled with realized drift; the qualitative
 claims are safe. n_open (= n·c·holding-time) sets the momentum's *decay length*,
 not its *tick-level strength*, which floors at ~0.65–0.69 and never reaches 0.5.
 
-### 4.3 DC count N(δ) ~ δ⁻² — SOLID at n=150, MOVES at n=500
+### 4.3 DC count N(δ) ~ δ⁻² — batch n=150 ≈ −2, CLOB default ≈ −1.6
 
-n=150: E_N ≈ −2 ± 0.2 across seven configurations (both engines, both sl, seeds
-1–3). **At n=500/T=100k, `close_mode` moves it**: quantity → −2.709, home →
-−1.805, *same n/T/seed/tp/sl*. Partly explained by §4.5 (the quantity arm is
-tethered, so it has fewer large excursions to count); the n-dependence itself is
-**UNEXPLAINED**. Do not state "DCs are stable" without this caveat.
+**Batch arm, n=150:** E_N ≈ −2 ± 0.2 across seven configurations (both engines,
+both sl, seeds 1–3). **At n=500/T=100k, `close_mode` moves it**: quantity → −2.709,
+home → −1.805, *same n/T/seed/tp/sl*.
+
+**CLOB default arm (rest+impatience, n=500, tp=sl=0.01), measured E_N ≈ −1.6**
+(−1.606 at sl=tp seed 42; ~−1.66 seen on the default figure) — clearly **not −2**.
+So the δ⁻² volatility law is a **batch-n=150 result, not a property of the default
+engine.** The DC count on the CLOB arm rises more slowly with δ (the price trends,
+so large-δ excursions are over-represented relative to BM). Do **not** state
+"N(δ)~δ⁻² holds" for the shipped default; it holds at n=150 batch. The n- and
+arm-dependence of E_N is **UNEXPLAINED** beyond "the trending CLOB price
+over-counts large excursions."
 
 ### 4.4 Overshoot law ⟨ω⟩ = δ — the MEAN is drift-inflated; the MEDIAN ≈ BM
 
