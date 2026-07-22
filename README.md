@@ -111,9 +111,10 @@ python test_benchmarks.py # bit-exact regression guard (benchmarks.json)
 python main.py            # legacy entry point
 ```
 
-Experiments (predictions stated in each header): `exp_stranding.py`,
-`exp_tpcluster.py`, `exp_nopen.py`, `exp_durations.py`, `exp_inventory.py`,
-`exp_oscillator_phase.py`.
+Experiments live in `experiments/` (predictions stated in each header):
+`exp_stranding.py`, `exp_tpcluster.py`, `exp_nopen.py`, `exp_durations.py`,
+`exp_inventory.py`, `exp_oscillator_phase.py`, `exp_detrend_tail.py`,
+`exp_drift_decomp.py`, `exp_side_asymmetry.py`.
 
 ---
 

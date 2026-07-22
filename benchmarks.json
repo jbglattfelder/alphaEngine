@@ -1,55 +1,55 @@
 {
   "conv_mixed_evolve": {
-    "n_round_trips": 4215,
-    "p_final": "3.2963997831651057",
+    "n_round_trips": 4169,
+    "p_final": "1.1848608930862563",
     "stranded": 0,
-    "x_share": "0.5005464460473027"
+    "x_share": "0.5001071001902955"
   },
   "entry_rest_v5": {
-    "n_round_trips": 681,
-    "p_final": "0.1544413411513133",
-    "stranded": 1,
-    "x_share": "0.5001436136275312"
+    "n_round_trips": 2409,
+    "p_final": "0.005004453659215014",
+    "stranded": 0,
+    "x_share": "0.4999515705629532"
   },
   "home_default_n150": {
-    "n_round_trips": 5665,
-    "p_final": "0.08624221262347864",
-    "stranded": 1,
-    "x_share": "0.500367710958402"
+    "n_round_trips": 5577,
+    "p_final": "0.6949287151863773",
+    "stranded": 0,
+    "x_share": "0.5000028763528248"
   },
   "quantity_treatment": {
-    "n_round_trips": 5345,
-    "p_final": "0.2549870328168722",
+    "n_round_trips": 5299,
+    "p_final": "0.33743845713307613",
     "stranded": 0,
-    "x_share": "0.508384835119144"
+    "x_share": "0.499870902415459"
   },
   "reference_row_f05_s1": {
-    "n_round_trips": 10188,
-    "p_final": "0.0005895985292513698",
-    "stranded": 3,
-    "x_share": "0.5000084847260455"
+    "n_round_trips": 10571,
+    "p_final": "0.15687195816516572",
+    "stranded": 0,
+    "x_share": "0.5000754197691236"
   },
   "rest_impatience": {
-    "n_round_trips": 2953,
-    "p_final": "0.06591543974839446",
+    "n_round_trips": 3775,
+    "p_final": "0.44276198502658387",
     "stranded": 1,
-    "x_share": "0.500147024579546"
+    "x_share": "0.49998210802062876"
   },
   "scale_invariance": {
     "identical_2p4": true,
     "identical_2pm6": true
   },
   "sl_limit_arm": {
-    "n_round_trips": 1012,
-    "p_final": "0.9795792277107832",
-    "stranded": 14,
-    "x_share": "0.5024631531526423"
+    "n_round_trips": 1082,
+    "p_final": "0.9986887151688308",
+    "stranded": 53,
+    "x_share": "0.5000281455070361"
   },
   "sl_wait_arm": {
-    "n_round_trips": 3071,
-    "p_final": "12.533323292329182",
+    "n_round_trips": 2904,
+    "p_final": "1.4397543886872692",
     "stranded": 0,
-    "x_share": "0.5007530005100794"
+    "x_share": "0.49998387872005134"
   },
   "tp_hierarchy": {
     "n_round_trips": 3388,

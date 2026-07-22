@@ -17,14 +17,14 @@ state and orientation; read that for the tables.
 explained, but because the null model has done its job: it now says, with a
 mechanism attached, exactly which market phenomena *require* level 1.
 
-> **THERE ARE TWO DEFAULT-ISH ARMS, AND MOST CLAIMS ARE ARM-CONDITIONAL.**
-> `config.py` defaults `entry_mode="ioc"` (the batch hybrid), but **`run_single.py`
-> ships `entry_mode="rest"` + `hold_fires_close=True`** — the pure-CLOB impatience
-> engine — at **n=500, tp=0.01, sl=0.02**. So the dashboard a person sees by
-> default is the CLOB arm, *not* the batch arm the older prose describes. Every
-> scorecard row below now names which arm it holds on. The two arms differ on the
-> headline results (compact support, fat tails, the price's stability), so
-> "the null model does X" is ambiguous until the arm is stated.
+> **MOST CLAIMS ARE ARM-CONDITIONAL — STATE THE ARM.** As of 2026-07-22 the
+> engine's *defaults* (`config.py` **and** `run_single.py`) are the **CLOB arm**:
+> `entry_mode="rest"`, `hold_fires_close=True`, `close_mode="home"`, n=500,
+> **tp=sl=0.01**, T=150k. The **batch arm** (`entry_mode="ioc"`,
+> `hold_fires_close=False`) is one switch away and is where much of §4 was
+> measured. The two arms differ on the headline results (compact support, fat
+> tails, price stability), so "the null model does X" is ambiguous until the arm
+> is stated. `Config.summary()` prints the resolved arm on every run.
 
 Scorecard of the bare mechanism (**batch** = ioc/home; **CLOB** = rest+impatience):
 
@@ -160,10 +160,11 @@ prints the resolved set on every run — **check the run header names your arm.*
 - **`sl_mode`** — SL execution discipline. `"market"` (default), `"wait"`,
   `"limit"`. The stranding-fix arm (§8). `close_mode="home"` requires
   `sl_mode="market"`.
-- **`entry_mode`** — how entries meet the market. `"ioc"` (default): the hybrid
-  batch-auction-plus-CLOB (balanced flow nets at `p_prev`, imbalance walks the
-  book). `"batch"`: alias of the same netting. `"rest"`: the **pure CLOB** —
-  entries are marketable-to-touch resting limits, no self-cross (§4.6/§4.7).
+- **`entry_mode`** — how entries meet the market. `"rest"` (default): the **pure
+  CLOB** — entries are marketable-to-touch resting limits, no self-cross
+  (§4.6/§4.7). `"ioc"`: the hybrid batch-auction-plus-CLOB (balanced flow nets
+  at `p_prev`, imbalance walks the book) — the batch arm of §4. (No other
+  aliases exist; validation accepts exactly {ioc, rest}.)
 - **`hold_fires_close`** — impatience. Default **True**: the clock runs while
   holding and a fire-in-position exits at market. Required to keep
   `entry_mode="rest"` alive (§4.7). *This default has silently flipped and cost
@@ -219,8 +220,10 @@ not its *tick-level strength*, which floors at ~0.65–0.69 and never reaches 0.
 both sl, seeds 1–3). **At n=500/T=100k, `close_mode` moves it**: quantity → −2.709,
 home → −1.805, *same n/T/seed/tp/sl*.
 
-**CLOB default arm (rest+impatience, n=500, tp=sl=0.01), measured E_N ≈ −1.6**
-(−1.606 at sl=tp seed 42; ~−1.66 seen on the default figure) — clearly **not −2**.
+**CLOB default arm (rest+impatience, n=500, tp=sl=0.01), measured E_N ≈ −1.4 to
+−1.6** (seed 1: −1.365; seed 42: −1.606; ~−1.66 on an earlier figure) — clearly
+**not −2**, and with substantial seed-to-seed spread (the exponent inherits the
+run's realized trend; treat any single-seed E_N as ±0.2 at best).
 So the δ⁻² volatility law is a **batch-n=150 result, not a property of the default
 engine.** The DC count on the CLOB arm rises more slowly with δ (the price trends,
 so large-δ excursions are over-represented relative to BM). Do **not** state
@@ -235,7 +238,9 @@ one-directional runs inflate it. Measured mean/δ ranges from ~1 (batch hump) to
 (CLOB sl=2tp) to 4.66 to 3.79 across arms/seeds; **none of these are the liquidity
 signal.** The tell: on BM, mean/δ ≈ 1.0 but **median/δ ≈ 0.70** (overshoots are
 right-skewed even for BM, so mean/median ≈ 1.5 is the healthy baseline). Across
-*every* engine arm measured, **median-ω/δ sits at ~0.6–0.9 ≈ the BM value**, while
+*every* engine arm measured, **median-ω/δ sits at ~0.6–0.95 ≈ the BM value**
+(T=150k sl=tp figures: 0.95 and 0.85; mean/median ≈ 4.3–4.9, the driftometer
+reading "trending"), while
 the mean balloons — i.e. mean/median ≫ 1.5 signals the price TRENDS, not that it
 is illiquid. `dc_analysis.measure` now returns `os_median`; `scaling_law.py` plots
 both series and prints mean/median. **Use the median; the mean law is a
@@ -320,10 +325,23 @@ Class-1 attractor instead of falling in: flat pool drains toward all-holding
 (depth ~580), takers thin, price drifts one-way, stale clocks flush en masse,
 pool refills — endogenous boom-flush cycle, period ~11k ticks, in nothing in the
 inputs. Best liquidity venue of any arm measured (86.6% two-sided vs the hybrid's
-13.9%). Carries a persistent **downward inter-cycle ratchet** — a new convention
-tilt, presumably the marketable-to-touch asymmetry; UNMEASURED. The registered
+13.9%). The observed runs carry a persistent inter-cycle ratchet in the run's
+broken direction (down in 4 of 5 seeds so far) — whether this is a convention
+tilt (candidate: marketable-to-touch asymmetry) or pure §4.9 instability is
+exactly what the per-arm sign tally decides; UNMEASURED. The registered
 next test (`exp_oscillator_phase.py`) splits DC events by cycle phase; prediction:
 the super-linear overshoot concentrates in the *flush* phase, build is near-BM.
+
+**Open observation (UNRATED — EUR lens):** on both sl=tp seeds at T=150k, the
+dashboard's EUR PnL shows a persistent side split — longs' sawtooth envelope
+grows (to +8–9k) while the price falls, shorts mirror down, and the PnL-vs-K0
+scatter is starkly asymmetric: shorts form a near-deterministic thin line
+(small, sure losses scaling with K0), longs a wide gamble cloud (bulk positive,
+heavy negative tail to −800). Per the standing rule this is a MOVING-RULER
+readout; it becomes a claim only after the X-share read and ≥10 seeds. If it
+survives, it is a new CLOB-arm convention tilt (candidate: the
+marketable-to-touch asymmetry) with a clean risk-sharing signature: shorts sell
+certainty, longs buy variance.
 
 ### 4.8 The n=2 limit — the mechanism naked
 
@@ -379,8 +397,10 @@ Restoring symmetry needs *restoring depth* (an unconditional maker), not a knob;
 "flipping" needs a designed bias. For a **null** model the finding is that
 direction is a free, unstable degree of freedom — not that any direction is
 achievable. **Open confirmation: a ≥10-seed sign tally at n=500 to distinguish
-pure 5/5 instability from a small residual bias + amplifier.** (Current: down,
-down, up on 3 seeds — consistent with ~50/50, underpowered.)
+pure 5/5 instability from a small residual bias + amplifier.** (Current tally, pooling
+arms: sl=2tp — down, down, up; sl=tp — down (seed 1), down (seed 42). 4 down /
+1 up, mixed sl arms, underpowered; a residual down-bias is not excluded and the
+tally must be run per-arm.)
 
 ---
 
@@ -609,34 +629,40 @@ read** (drift-inflated; use the median, §4.4). **All E_os values retired.**
 
 ## 10. Reproducibility — bit-check targets
 
-**RE-BASELINED 2026-07-15** on `close_mode="home"`. The old quantity-path table is
-retired (quantity remains as the named treatment).
-Config per row: `Config(f=<f>, c=0.004, T=6000, seed=<seed>, x_accounting=True,
-log_thresholds=True, symmetric_solvency=True)` (close_mode defaults "home").
+**RE-BASELINED 2026-07-22** with every parameter explicit (the previous table
+silently inherited the tp=sl=0.1-era defaults — the broken f=0.5/seed-4 row was
+the tell; this table supersedes it).
+Config per row: `Config(f=<f>, c=0.004, T=6000, seed=<seed>, tp=0.01, sl=0.01,
+close_mode="home", sl_mode="market", entry_mode="ioc", hold_fires_close=False,
+x_accounting=True, log_thresholds=True, symmetric_solvency=True)` — the **batch
+arm** at the canonical operating point.
 
 | f | seed | p_final (full precision) | drift ln(p/x0) | long X-share |
 |---|------|--------------------------|----------------|--------------|
-| 0.3 | 1 | 3.4145279771117274e-08 | -17.192641 | 0.300000 |
-| 0.3 | 2 | 1.5113000739620497 | +0.412970 | 0.540717 |
-| 0.3 | 3 | 5.686853241735516 | +1.738157 | 0.640346 |
-| 0.3 | 4 | 2.974382857270011e-06 | -12.725474 | 0.300001 |
-| 0.5 | 1 | 0.0005895985292513698 | -7.436069 | 0.500008 |
-| 0.5 | 2 | 0.08331088641502116 | -2.485176 | 0.500246 |
-| 0.5 | 3 | 0.4245626718502022 | -0.856696 | 0.500135 |
-| 0.5 | 4 | 2.0215660542334306→ see note | — | 0.507612 |
-| 1.0 | 1 | 3.982355415776321e-06 | -12.433637 | 0.999996 |
-| 1.0 | 2 | 0.22081746589221038 | -1.510419 | 0.819204 |
-| 1.0 | 3 | 3.827259569156836e-09 | -19.381117 | 1.000000 |
-| 1.0 | 4 | 2.117962981573481e-08 | -17.670226 | 1.000000 |
+| 0.3 | 1 | 0.13554392943140564 | -1.998459 | 0.347735 |
+| 0.3 | 2 | 1.1340804464666419 | +0.125822 | 0.512606 |
+| 0.3 | 3 | 0.012441591470125033 | -4.386710 | 0.304944 |
+| 0.3 | 4 | 0.13750582981643353 | -1.984089 | 0.348346 |
+| 0.5 | 1 | 0.15687195816516572 | -1.852325 | 0.500075 |
+| 0.5 | 2 | 1.0321064180131665 | +0.031602 | 0.499999 |
+| 0.5 | 3 | 0.021564421442883255 | -3.836710 | 0.500111 |
+| 0.5 | 4 | 0.3138089510272591 | -1.158971 | 0.500023 |
+| 1.0 | 1 | 0.5386688078064932 | -0.618654 | 0.650102 |
+| 1.0 | 2 | 0.8380439906329099 | -0.176685 | 0.544050 |
+| 1.0 | 3 | 0.009172901163932923 | -4.691502 | 0.990931 |
+| 1.0 | 4 | 0.4971507256093514 | -0.698862 | 0.668111 |
 
-*(f=0.5/seed4 row: regenerate to refresh; the home re-baseline value supersedes
-any quantity-path number. The x-share ≈ 0.50 band at f=0.5 is the load-bearing
-signal — drift is a free zero-mode and varies wildly by seed, as the spread of
-the drift column shows.)*
+*(The x-share ≈ 0.50 band at f=0.5 is the load-bearing signal — drift is a free
+zero-mode and varies by seed. Note f=1.0 no longer saturates x-share at 1.0 the
+way the tp=0.1-era table did: band width matters to the f-sweep, which is itself
+worth knowing.)*
 
-Bit-reproducibility guards: `test_benchmarks.py` / `benchmarks.json` (10
-benchmarks, bit-exact — verified green on current code this session; ioc/batch
-bit-identical), portable-init test, BM-control test. `.json`/`.jsonl` files are
+Bit-reproducibility guards: `test_benchmarks.py` / `benchmarks.json` — 10 cases,
+every case now pins **every switch and every band parameter** (tp/sl included:
+the 2026-07-22 default change tp/sl 0.1→0.01 leaked through 8 cases and turned
+the suite red, exactly as designed; refrozen at the canonical operating point
+with that justification). Plus the portable-init test and the BM-control test.
+Run `python3 test_benchmarks.py` after any engine change; expect 10/10. `.json`/`.jsonl` files are
 **run artifacts**, not sources of truth — parameters live in `config.py`.
 
 Instruments added this session (all validated, all committed-clean):
