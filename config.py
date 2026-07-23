@@ -131,6 +131,14 @@ class Config:
                                     # Direction selection today: spend_short = mild down-lean (8/2),
                                     # exact = firm up (5/5, +3.5). All three are TREATMENTS: any
                                     # chosen direction is by definition not the null.
+    book_mode: str = "btc"          # the venue's denomination (the X-program applied to the BOOK,
+                                    # book_coin.py): "btc" (default, bit-identical) = book.py, all
+                                    # sizes in BTC, budget clamps asymmetric. "coin" = every order
+                                    # denominated in the coin it DELIVERS; one side-agnostic
+                                    # conversion at match, at the maker's rate; per-coin dust equal
+                                    # in the initial gauge. If a bias survives book_mode="coin", it
+                                    # is DEMARCATED to live outside the venue -- which suffices for
+                                    # the null (the remaining gauges are each named in book_coin.py).
     recycle: bool = True        # False = each agent opens at most once (no re-entry)
     x_accounting: bool = True   # True = size/PnL/exits in geometric-mean units X (1 X = p^-.5 EUR = p^.5 BTC); size = (W_X/q)/sqrt(p), identical both tribes
     symmetric_sizing: bool = False  # True = long open size price-independent (/x_0 not /p) to test drift
@@ -202,6 +210,7 @@ class Config:
             "close_mode in {quantity,home}": self.close_mode in ("quantity", "home"),
             "entry_mode in {ioc,rest}": self.entry_mode in ("ioc", "rest"),
             "exit_promise valid": self.exit_promise in ("spend_short", "exact", "spend_long"),
+            "book_mode in {btc,coin}": self.book_mode in ("btc", "coin"),
             "close_mode=home requires sl_mode=market": self.close_mode != "home" or self.sl_mode == "market",
             "sl > 0": self.sl > 0,
             "epsilon >= 0": self.epsilon is not None and self.epsilon >= 0,

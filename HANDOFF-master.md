@@ -470,7 +470,25 @@ tilt, it does not null it. Status of the symmetry axiom: every force traced to
 mechanism (no uncaused asymmetry anywhere); but the NET's determinant is still
 unidentified, and the registered endgame is now the full coin-symmetric BOOK
 (the user's reframe applied to the venue itself: every order denominated in
-its own delivered coin), not further per-channel surgery. Artifacts: tally.jsonl (v2 + exact-arm rows),
+its own delivered coin), not further per-channel surgery.
+
+**THE COIN BOOK RAN (`book_mode="coin"`, book_coin.py; default "btc"
+bit-identical; benchmark case 11).** Every order denominated in the coin it
+delivers; one side-agnostic conversion at match, at the maker's rate; per-coin
+dust equal in the initial gauge; budgets one rule both sides. With spend_short
++ the banking fix this is the **fully coin-symmetric engine** — each tribe
+promises, dispatches, and settles in its own delivered coin. Measured (5
+seeds, T=15k): **the entry-pair imbalance vanishes** (pair nets −0.4/+5.4
+against gross ~±145 — the venue's arithmetic asymmetry is gone to measurement
+precision) — **and the lean survives: 4 DOWN / 1 UP, lnp ≈ −2.** VERDICT,
+per the null's own success criterion: **the bias is DEMARCATED.** It does not
+live in agent sizing (X-accounting), exit conventions (own-coin promises,
+banked residuals), or the venue's arithmetic (coin book). What remains is the
+short named list — the print/fallback gauge (last_price is EUR/BTC), the
+dust-equality gauge point — or genuine emergence from the tribes' asymmetric
+inventories meeting a priced world. Distinguishing those is level-0 epilogue
+work; the null's obligation — every convention symmetrized or its tilt named
+and bounded — is met. Artifacts: tally.jsonl (v2 + exact-arm rows),
 seed_asym.jsonl.
 
 ---

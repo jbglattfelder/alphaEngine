@@ -52,6 +52,7 @@ import numpy as np
 
 from config import Config
 from agents import Population, Side, House
+from book_coin import CoinBook
 from book import Book, LimitOrder, Dir, trades_to_fills, Fill
 
 
@@ -81,7 +82,8 @@ class Simulation:
         self.pop = Population(cfg, self.rng)
         self.house = House.seed(cfg)         # v1: funded central market maker
         self._bailouts_total = 0
-        self.book = Book(last_price=cfg.x_0, size_eps=1e-12 / cfg.x_0)      # the house owns the venue (CLOB)
+        self.book = (CoinBook(last_price=cfg.x_0, size_eps=1e-12 / cfg.x_0, x_ref=cfg.x_0)
+                     if cfg.book_mode == "coin" else Book(last_price=cfg.x_0, size_eps=1e-12 / cfg.x_0))      # the house owns the venue (CLOB)
         self.recorder = recorder if recorder is not None else _DictRecorder()
         self.p_int: float = cfg.x_0          # p_int(0) = x_0
         self._eur0 = sum(a.eur for a in self.pop.agents) + self.house.eur

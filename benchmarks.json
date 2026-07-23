@@ -1,4 +1,10 @@
 {
+  "coin_book": {
+    "n_round_trips": 3951,
+    "p_final": "0.5284883016216975",
+    "stranded": 0,
+    "x_share": "0.5000289654479368"
+  },
   "conv_mixed_evolve": {
     "n_round_trips": 4169,
     "p_final": "1.1848608930862563",
