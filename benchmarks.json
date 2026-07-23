@@ -6,16 +6,16 @@
     "x_share": "0.5001071001902955"
   },
   "entry_rest_v5": {
-    "n_round_trips": 2409,
-    "p_final": "0.005004453659215014",
+    "n_round_trips": 2485,
+    "p_final": "0.015008803171988369",
     "stranded": 0,
-    "x_share": "0.4999515705629532"
+    "x_share": "0.49985545835335204"
   },
   "home_default_n150": {
-    "n_round_trips": 5577,
-    "p_final": "0.6949287151863773",
+    "n_round_trips": 5538,
+    "p_final": "0.531965546725455",
     "stranded": 0,
-    "x_share": "0.5000028763528248"
+    "x_share": "0.5000347315735709"
   },
   "quantity_treatment": {
     "n_round_trips": 5299,
@@ -24,16 +24,16 @@
     "x_share": "0.499870902415459"
   },
   "reference_row_f05_s1": {
-    "n_round_trips": 10571,
-    "p_final": "0.15687195816516572",
-    "stranded": 0,
-    "x_share": "0.5000754197691236"
+    "n_round_trips": 10538,
+    "p_final": "0.11118578269509605",
+    "stranded": 1,
+    "x_share": "0.5000492272749284"
   },
   "rest_impatience": {
-    "n_round_trips": 3775,
-    "p_final": "0.44276198502658387",
-    "stranded": 1,
-    "x_share": "0.49998210802062876"
+    "n_round_trips": 3517,
+    "p_final": "0.52701984110591",
+    "stranded": 0,
+    "x_share": "0.49997037951216605"
   },
   "scale_invariance": {
     "identical_2p4": true,
@@ -52,9 +52,9 @@
     "x_share": "0.49998387872005134"
   },
   "tp_hierarchy": {
-    "n_round_trips": 3388,
-    "p_final": "0.05",
+    "n_round_trips": 3392,
+    "p_final": "0.30000000000000004",
     "stranded": 0,
-    "x_share": "0.5001365861988145"
+    "x_share": "0.5003097442760132"
   }
 }

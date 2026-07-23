@@ -222,7 +222,12 @@ class Simulation:
         order = srng.permutation(len(closes)) if len(closes) > 1 else range(len(closes))
         for i in order:
             a, sz = closes[i]
-            if a.pos.b < 0:                          # short cover: budget-capped BUY
+            if not self._close_unfinished(a):
+                self._settle_if_flat(a)              # home-flat: bank, don't re-trade
+                continue
+            if a.pos.b < 0 or (cfg.close_mode == "home" and a.side is Side.SHORT and cfg.exit_promise == "spend_short"):
+                # short cover: budget-capped BUY (home-spend shorts stay BUYs at ANY
+                # b -- the promise is q-denominated)
                 budget = max(a.eur, 0.0)
                 if cfg.close_mode == "home" and cfg.exit_promise == "spend_short":
                     budget = max(0.0, min(a.eur, a.pos.q))
@@ -279,6 +284,9 @@ class Simulation:
         Instrumented (P2 taxonomy): if a residual remains after the walk, classify
         the stop — opposite side exhausted -> "liquidity"; opposite depth remains
         (the budget clamp broke the loop) -> "funding". Counters only."""
+        if not self._close_unfinished(a):
+            self._settle_if_flat(a)          # home-flat: bank, don't re-trade
+            return
         eps = self.book.size_eps
         if self.cfg.close_mode == "home" and a.side is Side.SHORT:
             # v4 spend order: convert the remaining entry-EUR q at market. The
@@ -296,7 +304,7 @@ class Simulation:
                     self.close_fail[key] += 1
                     self.close_fail_agents[key].add(a.id)
             return
-        if a.pos.b > 1e-12:            # long: sell all held BTC into the bids
+        if a.pos.b > 1e-12 and not (self.cfg.close_mode == "home" and a.side is Side.SHORT and self.cfg.exit_promise == "spend_short"):            # long: sell all held BTC into the bids
             self.close_attempts["L"] += 1
             self._submit(LimitOrder(a.id, Dir.SELL, 1e-15, a.pos.b, t,
                                     is_close=True, pos_side=Side.LONG), rest_residual=False,
@@ -477,7 +485,11 @@ class Simulation:
                                 sl_sells.append((a, qty))
                             elif a.eur >= -a.pos.b * p_prev:
                                 sl_buys.append((a, -a.pos.b))
-                        elif a.pos.b > 0:                    # market (v2): long cover SELL, self-funded
+                        elif a.pos.b > 0 and not (cfg.close_mode == "home" and a.side is Side.SHORT and cfg.exit_promise == "spend_short"):
+                            # market (v2): long cover SELL, self-funded. Home-spend shorts are
+                            # EXCLUDED even at b>0: their close is dispatched in their HOME coin
+                            # (BUY while q remains) -- b-sign dispatch on a q-promise is the
+                            # par-4.9 flip churn.
                             qty = a.pos.b
                             if cfg.close_mode == "home" and cfg.exit_promise == "spend_long":
                                 qty = min(qty, -a.pos.q / p_prev)   # recover entry EUR only
@@ -506,6 +518,13 @@ class Simulation:
             for a in self.pop.alive():
                 if a.pos.b != 0 and not a.closing and a.ready_to_fire():
                     a.reset_pressure()
+                    if not self._close_unfinished(a):
+                        # home-flat (the promise in the agent's OWN coin is
+                        # delivered): settle & bank the coin residual -- never
+                        # re-trade it (par 4.9 flip channel; "coins are banked
+                        # as coins", FINDINGS V4.1)
+                        self._settle_if_flat(a)
+                        continue
                     a.closing = True
                     if a.tp_ref is not None:
                         self.book.cancel(a.tp_ref); a.tp_ref = None

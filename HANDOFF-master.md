@@ -451,9 +451,26 @@ REGISTERED candidate: the TP re-rest-on-growth rule — a short whose resting
 entry keeps filling re-submits its TP on each growth; every re-submission is a
 crossing opportunity. Testable by counting TP submissions and cross-fractions
 per tribe; the book-mirror (or a re-rest-rule arm) adjudicates this channel.
-Status of the symmetry axiom: down-force caused (spend exits — removed);
-up-force caused (short TP-cross count — mechanism one experiment away). No
-uncaused asymmetry anywhere. Artifacts: tally.jsonl (v2 + exact-arm rows),
+**The churn fix (user's coin-reframe, implemented):** the flip mechanism was
+completed — at p < x̄ the spend promise buys PAST flat (b > 0 with q > 0 still
+owed), and the b-sign-keyed dispatch then SOLD the excess, ping-ponging b
+through zero while grinding q down: a q-denominated promise executed by
+b-dispatched machinery. Fixed by dispatching home-spend short closes in their
+HOME coin (BUY while q remains, at any b) and banking the coin residual at
+settle (realized_base — the FINDINGS V4.1 rule, restored). Measured: the flip
+ORDER channel vanishes exactly; sign-crossings remain (inherent to the
+promise); benchmarks re-frozen with this justification. **And the direction
+did NOT move** (−1.81 vs −1.84, seed 1): the churn was not carrying the drag.
+Third force-composition measured, third reshuffle, same small net — entries
+invert to −7.7 (the count gap flips: shorts now out-fire longs), closes +29,
+tp_cross −24. **The channel decomposition is an accounting identity: closing
+one channel redistributes the drift through the others.** The channels are
+co-determined, not independent levers — sequential weld-removal relocates the
+tilt, it does not null it. Status of the symmetry axiom: every force traced to
+mechanism (no uncaused asymmetry anywhere); but the NET's determinant is still
+unidentified, and the registered endgame is now the full coin-symmetric BOOK
+(the user's reframe applied to the venue itself: every order denominated in
+its own delivered coin), not further per-channel surgery. Artifacts: tally.jsonl (v2 + exact-arm rows),
 seed_asym.jsonl.
 
 ---
