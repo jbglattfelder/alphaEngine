@@ -39,12 +39,12 @@ Scorecard of the bare mechanism (**batch** = ioc/home; **CLOB** = rest+impatienc
 | Stylized fact | Result |
 |---|---|
 | Unpredictability, ACF(r) ≈ 0 | **PASS** (n=500: +0.01) — for the opposite reason to a real market |
-| DC count N(δ) ~ δ⁻² | **batch n=150: E_N ≈ −2**; **CLOB default: E_N ≈ −1.6, NOT −2** (§4.3); moves with n/close_mode |
+| DC count N(δ) ~ δ⁻² | **per-seed DISTRIBUTION, not a number** (§4.10): frozen symmetric default measures −1.99…−1.67 across seeds (BM band ±0.04) — BM-like paths AND regime paths; older per-arm E_N claims (§4.3) were single-seed and are demoted to indicative |
 | Volatility clustering (physical time) | **FAIL** — but see the intrinsic-time duration result (§5.2) |
 | Fat tails (**batch**) | **absent** — P(\|r\|>4sd)=0 exactly (§4.5) |
 | Fat tails (**CLOB, default**) | **PRESENT** — genuine, drift-independent, 2 seeds: P(\|r\|>4sd) ≈ 0.5% (sl=tp) to 1.2% (sl=2tp) (§5.4) |
 | Fat tails (**batch + level-0.5 roundness**) | **PRESENT** — P(\|r\|>4sd) ≈ 2.1% (§5.1) |
-| ⟨ω⟩ = δ (overshoot law) | **FAIL as a mean** (mean is drift-inflated); **median-ω/δ ≈ 0.7 ≈ BM** on both arms (§4.4) |
+| ⟨ω⟩ = δ (overshoot law) | **FAIL as a mean** (drift-inflated); median-ω/δ is the honest read but ALSO seed-scattered: 0.59–1.06 at the frozen default (BM ≈ 0.70) — regime paths inflate even the median (§4.4, §4.10) |
 | Price direction (**CLOB**) | **UNSTABLE** — symmetry-breaking, not a drift; runs away up *or* down, direction noise-seeded (§4.9) |
 
 The unpredictability pass carries an asterisk: a real market is unpredictable
@@ -275,6 +275,17 @@ so large-δ excursions are over-represented relative to BM). Do **not** state
 arm-dependence of E_N is **UNEXPLAINED** beyond "the trending CLOB price
 over-counts large excursions."
 
+**SUPERSESSION NOTE (post-§4.10, at the frozen SYMMETRIC default):** the
+measured single-seed set is now E_N = −1.974 (s1, n=500), −1.988 (s9, n=150),
+−1.665 (s41, n=500) against a matched-BM band of −1.897 ± 0.037. There is no
+"the default's E_N": the exponent is a per-seed draw from a wide regime
+distribution. **Retro-caveat on this subsection:** the per-arm comparisons
+above (batch −2 vs CLOB −1.6; quantity −2.709 vs home −1.805) were largely
+SINGLE-SEED — under §4.10's scatter, arm and seed effects are confounded in
+them; they stand as indicative, not established, until re-run as per-arm
+distributions. The "n- and arm-dependence UNEXPLAINED" question is absorbed
+into §4.10's regime-selector question (Pareto draw imbalance, registered).
+
 ### 4.4 Overshoot law ⟨ω⟩ = δ — the MEAN is drift-inflated; the MEDIAN ≈ BM
 
 **The mean ⟨ω⟩/δ is not a clean liquidity read on a trending price** — a few long
@@ -284,7 +295,11 @@ signal.** The tell: on BM, mean/δ ≈ 1.0 but **median/δ ≈ 0.70** (overshoot
 right-skewed even for BM, so mean/median ≈ 1.5 is the healthy baseline). Across
 *every* engine arm measured, **median-ω/δ sits at ~0.6–0.95 ≈ the BM value**
 (T=150k sl=tp figures: 0.95 and 0.85; mean/median ≈ 4.3–4.9, the driftometer
-reading "trending"), while
+reading "trending"). **Post-§4.10 update, frozen symmetric default:** the
+median also scatters per seed — 0.59 (s9) to **1.06 (s41, ABOVE the BM
+0.70)** — regime paths inflate even the drift-robust statistic; the median is
+robust to drift but NOT to regime, so state it per-seed with the BM band
+alongside. Meanwhile,
 the mean balloons — i.e. mean/median ≫ 1.5 signals the price TRENDS, not that it
 is illiquid. `dc_analysis.measure` now returns `os_median`; `scaling_law.py` plots
 both series and prints mean/median. **Use the median; the mean law is a
