@@ -26,7 +26,7 @@ from analysis import Recorder
 N, T, SEED = 500, 150_000, 42
 C, TP, SL = 0.004, 0.01, 0.01
 ENTRY_MODE = "rest"          # "ioc" | "rest"
-HOLD_FIRES_CLOSE = True    # impatience (see HANDOFF_clob.md)
+HOLD_FIRES_CLOSE = True    # impatience (see HANDOFF-master.md par 4.7)
 OUT = "price_feed.csv"
 RUN_CHECKS = True          # False is faster on long runs
 # --------------------------------------------

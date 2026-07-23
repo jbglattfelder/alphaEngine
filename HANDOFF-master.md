@@ -17,14 +17,22 @@ state and orientation; read that for the tables.
 explained, but because the null model has done its job: it now says, with a
 mechanism attached, exactly which market phenomena *require* level 1.
 
-> **MOST CLAIMS ARE ARM-CONDITIONAL — STATE THE ARM.** As of 2026-07-22 the
-> engine's *defaults* (`config.py` **and** `run_single.py`) are the **CLOB arm**:
-> `entry_mode="rest"`, `hold_fires_close=True`, `close_mode="home"`, n=500,
-> **tp=sl=0.01**, T=150k. The **batch arm** (`entry_mode="ioc"`,
-> `hold_fires_close=False`) is one switch away and is where much of §4 was
-> measured. The two arms differ on the headline results (compact support, fat
-> tails, price stability), so "the null model does X" is ambiguous until the arm
-> is stated. `Config.summary()` prints the resolved arm on every run.
+> **MOST CLAIMS ARE ARM-CONDITIONAL — STATE THE ARM.** As of 2026-07-23 the
+> engine's *defaults* (`config.py` **and** `run_single.py`) are the **coin-symmetric
+> CLOB arm**: `entry_mode="rest"`, `hold_fires_close=True`, `close_mode="home"`,
+> **`book_mode="coin"`** (the verified symmetric venue), **`exit_promise="own_coin"`**
+> (the symmetric exit — mirror equivariance was verified on exactly this
+> configuration), n=500, **tp=sl=0.01**, T=150k. The **batch arm**
+> (`entry_mode="ioc"`, `hold_fires_close=False`) and the **legacy BTC book**
+> (`book_mode="btc"`) are one switch away and are where much of §4 was measured.
+> The arms differ on the headline results (compact support, fat tails, price
+> stability, and the direction lean), so "the null model does X" is ambiguous until
+> the arm is stated. `Config.summary()` prints the resolved arm on every run.
+>
+> **Dating matters here:** several §4 results predate the coin-book and own-coin-exit
+> defaults and were measured on the BTC book. Where a number is quoted with a
+> direction lean (e.g. the 8/2 tally), check whether it is the btc-book or coin-book
+> row — §4.9 marks both.
 
 Scorecard of the bare mechanism (**batch** = ioc/home; **CLOB** = rest+impatience):
 
@@ -115,7 +123,7 @@ SL closes fire as **market orders walking the book** → firing agents submit
 cancel-and-replace on re-fire) → settle → bankruptcy → record. **No balanced-flow
 auction** — entries meet the book directly (`_step_rest`).
 
-**`ioc` (the `config.py` bare default, batch hybrid):** same up to entries, then an
+**`ioc` (the batch hybrid — a one-switch treatment; no longer any default):** same up to entries, then an
 **entry auction** — balanced flow nets at `p_prev` impact-free; only the *net*
 imbalance walks the book. **The scaling-law, compact-support, and lattice results
 in §4 were mostly measured on THIS arm, not the shipped default** — see the
@@ -178,6 +186,30 @@ prints the resolved set on every run — **check the run header names your arm.*
   EUR clamp on BUYs.
 - **`sl_grid`** (default 0) — snap SL triggers to a shared log grid (Osler
   clustering probe; floor/ceil snap, freeze bug documented in code).
+- **`exit_promise`** (default `"own_coin"`, alias `"spend_short"`) — home-mode exit
+  denomination: **WHOSE exit promises WHICH currency.** This is the par-4.9 weld,
+  now a switch. `"own_coin"`: each tribe delivers its OWN coin exactly (longs BTC,
+  shorts their entry EUR), residuals banked — **the symmetric exit; mirror
+  equivariance was verified on exactly this configuration.** Treatments:
+  `"exact"` (both tribes BTC-exact = base-privileged; measured flips 0, **5/5 UP,
+  lnp +3.5 ± 0.14** — the tp_cross up-force runs unopposed); `"spend_long"` (longs
+  promise entry EUR, under-selling at profit; **NOT the mechanical mirror of
+  spend_short** — seed 1 collapses to lnp −26, a third regime, with an unexplained
+  `book.py` resting-price RuntimeWarning: **EXPLORATORY, 1 seed**). Any chosen
+  direction is by definition **not** the null.
+- **`book_mode`** (**default flipped to `"coin"` 2026-07-23**) — the venue's
+  denomination, i.e. the X-program applied to the BOOK (`book_coin.py`). `"coin"`:
+  every order denominated in the coin it DELIVERS, one side-agnostic conversion at
+  match at the maker's rate, per-coin dust equal in the initial gauge, budgets one
+  rule both sides — **the verified symmetric venue** (§4.9). `"btc"` = the legacy
+  base-privileged book (`book.py`), retained as a treatment.
+- **`mirror`** (default False) — the residual-lean **classifier**, not a sizing flag
+  (§4.9 epilogue): relabel the two coins at init (every agent's side flips, wallet
+  swaps eur↔btc). The involution the dynamics were shown to commute with.
+- **`stall_T`** (default 0 = off) — liveness detector: stop the run if no trade has
+  printed for this many ticks. Detects the CLOB absorbing states (§4.7) instead of
+  burning dead ticks; `stopped_reason` names the stall. **Detection, not
+  prevention — the freeze is a theorem.**
 - **`house_reserve_frac`** (0.1), **`house_bailout`** (False) — §6.
 
 ---
@@ -433,8 +465,9 @@ and drags. Falsified en route: "shorts linger in the close pipeline" (longs
 close *slower*, 3.6 vs 2.8 ticks, and complete more SL/impatience episodes —
 shorts exit via TP more; the entry-count gap needs a different account, OPEN).
 
-**The BTC-exact exit arm RAN (`exit_btc_exact`, default False bit-identical).
-Scored:** flips vanish — CONFIRMED (5069 → ~0; tp_cross below-last 59% → 2%).
+**The BTC-exact exit arm RAN** (then the boolean `exit_btc_exact`; **now
+`exit_promise="exact"`** — the flag became a three-position switch, see §3).
+**Scored:** flips vanish — CONFIRMED (5069 → ~0; tp_cross below-last 59% → 2%).
 "Tally toward 50/50" — **FALSIFIED informatively: 5/5 seeds UP, lnp = +3.5 ±
 0.14, near-deterministic.** The spend arm was two ~equal opposing structural
 biases (fresh-up ≈ +50 vs stale-down ≈ −50) in near-cancellation; remove one
@@ -472,8 +505,10 @@ unidentified, and the registered endgame is now the full coin-symmetric BOOK
 (the user's reframe applied to the venue itself: every order denominated in
 its own delivered coin), not further per-channel surgery.
 
-**THE COIN BOOK RAN (`book_mode="coin"`, book_coin.py; default "btc"
-bit-identical; benchmark case 11).** Every order denominated in the coin it
+**THE COIN BOOK RAN (`book_mode="coin"`, book_coin.py; benchmark case 11).**
+*(It was then the non-default arm, with `"btc"` bit-identical; on 2026-07-23 the
+**default flipped to `"coin"`** — the symmetric venue is now what runs by default,
+and `"btc"` is the retained treatment.)* Every order denominated in the coin it
 delivers; one side-agnostic conversion at match, at the maker's rate; per-coin
 dust equal in the initial gauge; budgets one rule both sides. With spend_short
 + the banking fix this is the **fully coin-symmetric engine** — each tribe

@@ -54,7 +54,8 @@ cancels-and-replaces its resting entry at the live price) → settle → bankrup
 record. There is **no balanced-flow auction on this arm** — every entry meets the
 book directly.
 
-One tick, **`entry_mode="ioc"` (the batch hybrid, `config.py`'s bare default):**
+One tick, **`entry_mode="ioc"` (the batch hybrid — now a one-switch treatment, no
+longer any default):**
 same up to entries, then balanced buy/sell flow **nets at the last price with no
 impact** and only the **net imbalance** walks the book. This is the arm the older
 scaling-law / compact-support results were measured on; it is *not* what
@@ -123,12 +124,24 @@ Experiments live in `experiments/` (predictions stated in each header):
 `Config.summary()` prints the resolved set every run — **the header names your
 arm.** Full descriptions in `HANDOFF-master.md` §3. In brief:
 
+- **`entry_mode`** — `"rest"` (**default**: pure CLOB, marketable-to-touch entries
+  that rest; needs impatience to stay alive) vs `"ioc"` (the batch hybrid: balanced
+  flow nets at the last price, only the imbalance walks the book).
+- **`hold_fires_close`** — impatience (default True; keeps the pure CLOB live).
 - **`close_mode`** — `"home"` (default, symmetric null) vs `"quantity"` (realistic;
   stranding/squeezes — a *treatment*, don't delete it).
-- **`entry_mode`** — `"ioc"` (default hybrid: net balanced flow, walk the imbalance)
-  vs `"rest"` (pure CLOB; needs impatience to stay alive).
-- **`hold_fires_close`** — impatience (default True; keeps the pure CLOB live).
+- **`exit_promise`** — `"own_coin"` (**default**: each tribe delivers its own coin;
+  the symmetric exit the mirror equivariance was verified on) vs `"exact"` /
+  `"spend_long"` (treatments that *select* a price direction — see `HANDOFF-master.md`
+  §3/§4.9).
+- **`book_mode`** — `"coin"` (**default since 2026-07-23**: the verified symmetric
+  venue, every order denominated in the coin it delivers) vs `"btc"` (legacy
+  base-privileged book, retained as treatment).
+- **`mirror`** — the label-relabel involution used to *classify* residual leans, not
+  a sizing flag.
 - **`sl_mode`** — `"market"` / `"wait"` / `"limit"` (the stranding-fix arms).
+- **`stall_T`** — liveness detector for the CLOB absorbing states (detection, not
+  prevention).
 - **`x_accounting`**, **`log_thresholds`**, **`symmetric_solvency`** (all True):
   the covariant-null defaults.
 
@@ -160,10 +173,21 @@ arm.** Full descriptions in `HANDOFF-master.md` §3. In brief:
 
 - **Trading does not redistribute wealth**: ΔGini ≈ 0 over 20 seeds; symmetry fixes
   the shares, conservation only the total.
+- **The engine is label-equivariant — the symmetric null was reached.** With the
+  coin-symmetric venue (`book_mode="coin"`) and own-coin exit promises, the
+  coin-relabel involution (`mirror=True`) inverts the price direction in **5/5 seed
+  pairs** (p = 1/32). So P(down) = P(up) *by demonstrated symmetry*, and the earlier
+  residual "down-lean" is reclassified as finite-sample noise from a symmetric
+  ensemble — not a bias. Verified by an explicit involution the dynamics commute
+  with, not by absence of evidence.
 - **The price level carries no information** — no anchor. On the **batch** arm it
-  wanders; on the **CLOB** arm (the `run_single` default) it is directionally
-  *unstable* — runs away up or down, direction seeded by noise (a symmetry-breaking
-  instability, not a drift). "Prices always fall" was a two-seed artifact.
+  wanders; on the **CLOB** arm (the default) it is directionally *unstable* — runs
+  away up or down, direction a free symmetric mode seeded by noise (a
+  symmetry-breaking instability, not a drift). "Prices always fall" was a two-seed
+  artifact.
+- **Direction is selectable, and selecting it forfeits the null.** `exit_promise`
+  arms tilt the price (`"exact"` → 5/5 up, +3.5); any chosen direction is by
+  definition a treatment, not the null.
 - **The book compresses the capital distribution** (filled ∝ requested^γ, γ from
   ~0.1 thin to ~1 liquid) — the one result not put in by hand.
 - **The price's modal step is the TP band** (`sd(r)≈0.78·tp`, median|step|=tp on

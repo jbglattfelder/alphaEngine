@@ -5,7 +5,7 @@ WHAT THIS IS
 ------------
 A frozen set of bit-exact outcomes covering every engine path (home baseline,
 quantity treatment, sl_mode arms, convention mixing + evolution, TP clustering,
-scale invariance, and one REFERENCE.md row), validated in about a minute. The
+scale invariance, and one HANDOFF-master.md par-10 reference row), validated in about a minute. The
 model is chaotic and bit-reproducible across machines (HANDOFF §3b/§8), so the
 correct comparison is EXACT equality: any deviation, however small, means the
 dynamics changed. There is no tolerance because there is nothing to tolerate.
@@ -21,7 +21,7 @@ RULES
 - A red result after a "refactor" means the refactor changed the model. Find out
   why before touching this file.
 - --update is a DECISION, not a fix. Every re-freeze must be named in the commit
-  message with the change that justifies it (the REFERENCE.md re-baseline of
+  message with the change that justifies it (the HANDOFF-master.md par-10 re-baseline of
   2026-07-15 is the template).
 - Keep the suite fast. A benchmark nobody runs protects nobody.
 """
@@ -59,7 +59,7 @@ CASES = {
     # Every case pins EVERY behavioural switch explicitly (close_mode, sl_mode,
     # entry_mode, hold_fires_close). Cases must be DEFAULT-PROOF: a user flipping
     # a config default for local convenience must not change what these guard.
-    # (Lesson of the fourth silent-default incident; see HANDOFF_clob.md §7.)
+    # (Lesson of the fourth silent-default incident; see HANDOFF-master.md par 9 (standing rules).)
     "home_default_n150":      dict(book_mode="btc", mirror=False, exit_promise="spend_short", tp=0.01, sl=0.01, n=150, T=4000, seed=42, c=0.004, close_mode="home",
                                    sl_mode="market", entry_mode="ioc", hold_fires_close=False),
     "quantity_treatment":     dict(book_mode="btc", mirror=False, exit_promise="spend_short", tp=0.01, sl=0.01, n=150, T=4000, seed=42, c=0.004, close_mode="quantity",
