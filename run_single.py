@@ -18,7 +18,7 @@ from analysis import Recorder, Analyser
 # ---------------- edit these ----------------
 N     = 150     # agents PER SIDE   (total population = 2*N)
 T     = 100_000    # number of ticks
-SEED  = 42
+SEED  = 9
 F     = 0.5     # initial home fraction
 C     = 0.004   # firing rate (activity); higher = livelier & slower
 
@@ -29,10 +29,13 @@ CLOSE_MODE = "home"      # "home" = each tribe delivers what it holds (v4 symmet
                          # "quantity" = both tribes re-trade a fixed BTC quantity (v3; stranding)
 SL_MODE    = "market"    # "market" | "limit" | "wait"   (close_mode="home" requires "market")
 
-X_ACCOUNTING       = True   # geometric-mean (X) sizing, identical formula both tribes
-LOG_THRESHOLDS     = True   # log-symmetric TP/SL bands (kills the percentage gauge drift)
-SYMMETRIC_SOLVENCY = True   # clamp SELLs by BTC held, mirroring the EUR clamp on BUYs
-ENTRY_MODE         = "rest" # how ENTRIES meet the market (v5 pure-CLOB switch)
+X_ACCOUNTING       = True       # geometric-mean (X) sizing, identical formula both tribes
+LOG_THRESHOLDS     = True       # log-symmetric TP/SL bands (kills the percentage gauge drift)
+SYMMETRIC_SOLVENCY = True       # clamp SELLs by BTC held, mirroring the EUR clamp on BUYs
+ENTRY_MODE         = "rest"     # how ENTRIES meet the market (v5 pure-CLOB switch)
+BOOK_MODE          = "coin"     # the venue's denomination 
+EXIT_PROMISE       = "own_coin" # home-mode exit denomination — WHOSE exit promises WHICH currency
+
 HOLD_FIRES_CLOSE   = True   # impatience: the pressure clock also runs while HOLDING -> close
 
 SNAPSHOT_EVERY = 500   # per-agent PnL snapshot cadence (0 = off; faster on long runs)
@@ -47,7 +50,9 @@ cfg = Config(n=N, T=T, seed=SEED, f=F, c=C,
              log_thresholds=LOG_THRESHOLDS,
              symmetric_solvency=SYMMETRIC_SOLVENCY,
              entry_mode=ENTRY_MODE,
-             hold_fires_close=HOLD_FIRES_CLOSE)
+             hold_fires_close=HOLD_FIRES_CLOSE,
+             book_mode=BOOK_MODE,
+             exit_promise=EXIT_PROMISE)
 print(cfg.summary())          # prints the RESOLVED switches -- check them against the block
 
 sim = Simulation(cfg, recorder=Recorder(), run_checks=RUN_CHECKS,

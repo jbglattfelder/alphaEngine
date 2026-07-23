@@ -35,7 +35,7 @@ from dc_analysis import measure, fit, load_csv
 # ---------------- edit these ----------------
 N     = 150     # agents PER SIDE   (total population = 2*N)
 T     = 100_000    # number of ticks
-SEED  = 42
+SEED  = 9
 F     = 0.5     # initial home fraction
 C     = 0.004   # firing rate (activity); higher = livelier & slower
 
@@ -46,15 +46,17 @@ CLOSE_MODE = "home"      # "home" = each tribe delivers what it holds (v4 symmet
                          # "quantity" = both tribes re-trade a fixed BTC quantity (v3; stranding)
 SL_MODE    = "market"    # "market" | "limit" | "wait"   (close_mode="home" requires "market")
 
-X_ACCOUNTING       = True   # geometric-mean (X) sizing, identical formula both tribes
-LOG_THRESHOLDS     = True   # log-symmetric TP/SL bands (kills the percentage gauge drift)
-SYMMETRIC_SOLVENCY = True   # clamp SELLs by BTC held, mirroring the EUR clamp on BUYs
-ENTRY_MODE         = "rest" # how ENTRIES meet the market (v5 pure-CLOB switch)
+X_ACCOUNTING       = True       # geometric-mean (X) sizing, identical formula both tribes
+LOG_THRESHOLDS     = True       # log-symmetric TP/SL bands (kills the percentage gauge drift)
+SYMMETRIC_SOLVENCY = True       # clamp SELLs by BTC held, mirroring the EUR clamp on BUYs
+ENTRY_MODE         = "rest"     # how ENTRIES meet the market (v5 pure-CLOB switch)
+BOOK_MODE          = "coin"     # the venue's denomination 
+EXIT_PROMISE       = "own_coin" # home-mode exit denomination — WHOSE exit promises WHICH currency
+
 HOLD_FIRES_CLOSE   = True   # impatience: the pressure clock also runs while HOLDING -> close
 
 CSV_PATH = "price_feed.csv"
 REUSE_CSV = True        # True: skip the run if CSV_PATH already exists (analysis is instant)
-RUN_CHECKS = False      # per-tick conservation asserts; False is faster on long runs
 
 DELTA_LO_MULT = 8.0     # delta grid floor, in units of the feed's tick sd (see note above)
 DELTA_HI_MULT = 40.0    # ceiling; raise for longer feeds, lower if thresholds get dropped
@@ -62,7 +64,9 @@ N_DELTAS = 20
 MIN_EVENTS = 12         # drop a threshold with fewer DC events than this (nothing to average)
 
 OUT = "scaling_laws.png"
-SHOW = True
+
+RUN_CHECKS     = True  # per-tick conservation + solvency asserts (False is faster)
+SHOW           = True
 # --------------------------------------------
 
 
@@ -75,7 +79,9 @@ def build_feed(path: str) -> None:
              log_thresholds=LOG_THRESHOLDS,
              symmetric_solvency=SYMMETRIC_SOLVENCY,
              entry_mode=ENTRY_MODE,
-             hold_fires_close=HOLD_FIRES_CLOSE)
+             hold_fires_close=HOLD_FIRES_CLOSE,
+             book_mode=BOOK_MODE,
+             exit_promise=EXIT_PROMISE)
     print(cfg.summary())
     sim = Simulation(cfg, recorder=Recorder(), run_checks=RUN_CHECKS).run()
     tick = sim.recorder.series("tick")

@@ -165,7 +165,6 @@ class Config:
     sizing_power: float = 0.5       # exponent in invariant sizing; 0.5 = exact numeraire-covariant p^(-1/2).
                                     # (~0.4 was the empirically drift-centering value in earlier calibration runs;
                                     # the committed default is the principled 0.5, not the calibrated 0.4)
-    mirror: bool = False            # True = x->1/x mirror world: move the 1/p conversion to the BTC-home tribe
     symmetric_solvency: bool = True # True = clamp SELLs by BTC held, mirroring the EUR-spend clamp on BUYs
     log_thresholds: bool = True    # True = log-symmetric TP/SL bands x*e^{+-tp} (kills percentage gauge drift)
     # ── sizing-convention mix + evolution (§3f: no neutral convention exists;
