@@ -139,6 +139,16 @@ class Config:
                                     # in the initial gauge. If a bias survives book_mode="coin", it
                                     # is DEMARCATED to live outside the venue -- which suffices for
                                     # the null (the remaining gauges are each named in book_coin.py).
+    mirror: bool = False            # THE MIRROR (the residual-lean classifier, par 4.9 epilogue):
+                                    # relabel the two coins at init -- every agent's side flips and
+                                    # its wallet swaps (eur<->btc), so old longs' positions become
+                                    # shorts' and vice versa; at x_0=1, f=0.5 the mirrored config is
+                                    # the original up to the coin labels. Read results in the COMMON
+                                    # gauge (p_common = 1/p_run). If the lean INVERTS in common
+                                    # gauge, the residual attaches to the coin labels (a gauge
+                                    # bias, demarcated); if it does NOT invert, a label-blind
+                                    # asymmetry remains in the machinery (iteration order,
+                                    # tie-breaks, stream assignment) -- localizable by bisection.
     recycle: bool = True        # False = each agent opens at most once (no re-entry)
     x_accounting: bool = True   # True = size/PnL/exits in geometric-mean units X (1 X = p^-.5 EUR = p^.5 BTC); size = (W_X/q)/sqrt(p), identical both tribes
     symmetric_sizing: bool = False  # True = long open size price-independent (/x_0 not /p) to test drift

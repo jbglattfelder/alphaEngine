@@ -5,6 +5,12 @@
     "stranded": 0,
     "x_share": "0.5000289654479368"
   },
+  "coin_book_mirror": {
+    "n_round_trips": 3965,
+    "p_final": "1.566311431105044",
+    "stranded": 0,
+    "x_share": "0.500005491478982"
+  },
   "conv_mixed_evolve": {
     "n_round_trips": 4169,
     "p_final": "1.1848608930862563",

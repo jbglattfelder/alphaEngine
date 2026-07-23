@@ -364,6 +364,13 @@ class Population:
                                 K0=float(k0), d=d_of(float(k0))))
             aid += 1
 
+        if cfg.mirror:
+            # the coin-relabel involution: side flips, wallet swaps. Everything
+            # else (K0, d, ids, order) is label-blind and stays. See config.
+            for a in agents:
+                a.side = Side.SHORT if a.side is Side.LONG else Side.LONG
+                a.eur, a.btc = a.btc, a.eur
+
         if cfg.phase_jitter:                            # break the artificial t=0 synchrony:
             # dedicated stream: jitter must NOT shift the capital draw's bit stream,
             # or jitter-on vs jitter-off would be two different runs, not an A/B.

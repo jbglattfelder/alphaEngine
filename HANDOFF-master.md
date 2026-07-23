@@ -488,7 +488,26 @@ short named list — the print/fallback gauge (last_price is EUR/BTC), the
 dust-equality gauge point — or genuine emergence from the tribes' asymmetric
 inventories meeting a priced world. Distinguishing those is level-0 epilogue
 work; the null's obligation — every convention symmetrized or its tilt named
-and bounded — is met. Artifacts: tally.jsonl (v2 + exact-arm rows),
+and bounded — is met.
+
+**THE MIRROR RAN (`mirror=True`: side-flip + wallet-swap involution at init;
+benchmark case 12) — AND THE QUESTION CLOSES BETTER THAN DEMARCATION.**
+Five seed-pairs, coin book, canonical arm: **every pair inverts** —
+(−2.06/+1.48), (+0.70/−2.21), (−1.92/+1.81), (−2.25/+0.84), (−1.99/+0.64);
+5/5 sign flips, p = 1/32 under a null of no effect, magnitudes comparable.
+**The engine is label-equivariant to measurement precision.** Consequence:
+P(down) = P(up) by demonstrated symmetry, and the residual lean (8/2 btc-book;
+4/1 coin-book) is RECLASSIFIED: not a bias — finite-sample noise from a
+symmetric ensemble (consistent with the never-rejected p = 0.109 all along).
+The 'remaining gauges' list (print gauge, dust gauge point) is thereby
+measured inert at this precision. **The coin-symmetric engine (book_mode=
+"coin" + own-coin exit promises + banked residuals) is the symmetric null the
+v4 program aimed at** — verified not by absence of evidence but by an explicit
+involution the dynamics commute with. The direction is a free symmetric mode;
+its per-run sign is seeded by the stream-to-tribe assignment; nothing more was
+ever there. (Caveats: statistical equivariance at 5 pairs, T=15k, one arm —
+bit-level equivariance and a 20-pair confirmation are the epilogue's
+tightening, not its substance.) Artifacts: tally.jsonl (v2 + exact-arm rows),
 seed_asym.jsonl.
 
 ---
