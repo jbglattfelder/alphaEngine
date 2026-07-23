@@ -360,7 +360,8 @@ class Simulation:
             self.trade_log.append({
                 "tick": self.t, "agent": a.id,
                 "side": "L" if a.side is Side.LONG else "S",
-                "exit": "SL" if a.closing else "TP",
+                "exit": (a.close_reason.upper() if (a.closing and a.close_reason)
+                         else ("SL" if a.closing else "TP")),
                 "pnl": float(realized),
                 "pnl_base": float(a.pos.pnl_base(self.p_int)),   # home-gauge PnL (BTC)
                 "entry_q": float(a.entry_q),
@@ -465,6 +466,7 @@ class Simulation:
                     hit = (px >= a.sl_level) if a.sl_is_buy else (px <= a.sl_level)
                     if hit:
                         a.closing = True
+                        a.close_reason = "sl"
                         if a.tp_ref is not None:
                             book.cancel(a.tp_ref); a.tp_ref = None
                         if a.entry_ref is not None:      # reduce-only from here: a resting
@@ -528,6 +530,7 @@ class Simulation:
                         self._settle_if_flat(a)
                         continue
                     a.closing = True
+                    a.close_reason = "timer"
                     if a.tp_ref is not None:
                         self.book.cancel(a.tp_ref); a.tp_ref = None
                     if a.entry_ref is not None:

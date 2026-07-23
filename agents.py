@@ -113,6 +113,7 @@ class Agent:
     conv_live: bool = True           # sizing convention (conv_mode="mixed"): convert at live price vs at x_0
     entry_ref: Optional[int] = None  # oref of this agent's resting entry (entry_mode="rest"; at most one)
     tp_pos_b: float = 0.0            # pos.b snapshot when the TP was rested (refresh trigger under partial entry fills)
+    close_reason: str = ""           # why the close began: "sl" | "timer" (set at trigger; "" = TP path)
 
     # ── derived views ─────────────────────────────────────────────────────────
     @property
@@ -252,6 +253,7 @@ class Agent:
         self.open_ref = self.tp_ref = self.close_ref = None
         self.sl_level = None
         self.closing = False
+        self.close_reason = ""
 
 
 @dataclass
