@@ -97,12 +97,22 @@ to zero, asserted every tick.
 - **The venue.** A central limit order book (`book.py`). It matches; it never
   takes a position (except the optional house maker, §6/§7).
 
-### The three mechanisms, and why the split is forced
+### The four mechanisms, and why the split is forced
 
-There are only three: agents **open**, **take profit**, **stop out**. By *role*:
+There are exactly four on the shipped default: agents **open**, **take
+profit**, **stop out**, and **time out** (the timer-exit / impatience: the
+same pressure clock that opens a flat agent closes a stale one at market —
+unconditional in price, conditional in time; no parameter beyond the clock the
+agent already owns). The batch arm (`hold_fires_close=False`) runs the first
+three only — the historical three-mechanism frame is ARM-CONDITIONAL. By
+*role*, on the default arm:
 
-- **Aggressive flow** = the entry imbalance + SL covers (market orders).
-- **Passive depth** = **TP limits, and nothing else.**
+- **Aggressive flow** = the entry imbalance crossing the touch + SL covers +
+  timer exits (all market-order-like).
+- **Passive depth** = **TP limits AND resting entry residuals** — two classes
+  with opposite characters: TPs are winners waiting (withdraw exactly when
+  needed, §4.6); resting entries are wishes waiting (counter-cyclical: present
+  precisely when flow is one-sided). On the batch arm, TP-only.
 
 The split is geometry, not choice. A TP is an order to exit at a *better* price
 than the market (sell higher than you bought, or buy lower than you sold) —
@@ -110,8 +120,10 @@ nobody will give you that yet, so it rests. An SL exits at a *worse* price —
 everyone takes it instantly, so it cannot rest; it must be a conditional trigger
 firing a market order. Tribe-symmetric: a long's TP rests as an **ask** above, a
 short's TP rests as a **bid** below; both SLs are immediately marketable. Price
-*level* is a red herring — *direction* is the whole of it. Consequence: **the
-book can only ever hold winning positions.** (This is a property of a *CLOB*; in
+*level* is a red herring — *direction* is the whole of it. Consequence, **batch arm**: the
+book can only ever hold winning positions. **Default (rest) arm**: the book
+holds winners' TPs *plus* the flat agents' resting entries — the second class
+is what the pure CLOB added, and it is not a winner's order. (This is a property of a *CLOB*; in
 wholesale FX both order types are conditional market orders given to a dealer, so
 the feedback *sign* transfers but the liquidity consequence does not.)
 
@@ -764,8 +776,10 @@ read** (drift-inflated; use the median, §4.4). **All E_os values retired.**
 
 ### Standing rules (do not re-break)
 
-- **The three-mechanism inventory is the frame.** The only passive depth is TP
-  limits; any new mechanism changes what liquidity *is* — say so.
+- **The FOUR-mechanism inventory is the frame** (open, take-profit, stop-loss,
+  timer-exit; the batch arm runs three). Passive depth = TP limits + resting
+  entries on the default arm (TP-only on batch); any new mechanism changes
+  what liquidity *is* — say so.
 - **Read wealth/transfer in X, never EUR.** The EUR PnL panel is a moving ruler;
   the geometric-mean share is the covariant measure.
 - **Measure in logs, not relative returns**, anywhere the price spans e-folds.

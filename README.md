@@ -42,9 +42,11 @@ These absorb the former `CLAUDE.md`, `DIRECTION.md`, `REFERENCE.md`, all
 - **The venue.** A CLOB (`book.py`). It matches; it never takes a position (except
   the optional house maker).
 
-**There are only three mechanisms: open, take profit, stop out.** The only passive
-depth is TP limits — so *liquidity is other agents' unrealized profit*, and that
-single fact drives most of the findings.
+**There are exactly four mechanisms: open, take-profit, stop-loss, timer-exit**
+(the pressure clock also closes stale positions; the batch arm runs the first
+three). Passive depth is TP limits plus, on the default arm, resting entry
+residuals — so *liquidity is other agents' unrealized profit, plus waiting
+wishes*, and that fact drives most of the findings.
 
 One tick, **default arm (`entry_mode="rest"`, the pure CLOB shipped by
 `run_single`):** accumulate pressure → rest TPs / arm SLs → **SL closes fire as
