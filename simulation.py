@@ -224,7 +224,7 @@ class Simulation:
             a, sz = closes[i]
             if a.pos.b < 0:                          # short cover: budget-capped BUY
                 budget = max(a.eur, 0.0)
-                if cfg.close_mode == "home":
+                if cfg.close_mode == "home" and not cfg.exit_btc_exact:
                     budget = max(0.0, min(a.eur, a.pos.q))
                 self._submit(LimitOrder(a.id, Dir.BUY, 1e18, sz, t,
                                         is_close=True, pos_side=a.side),
@@ -418,11 +418,14 @@ class Simulation:
                 else:
                     tpp = a.tp_price(cfg)
                     if cfg.close_mode == "home":
-                        # spend order: size q/p_tp at p_tp delivers EXACTLY the entry
-                        # EUR q if fully filled (partials stay consistent: remaining
-                        # order size * p_tp == remaining q).
-                        size = a.pos.q / tpp
-                        budget = max(0.0, min(a.eur, a.pos.q))
+                        if cfg.exit_btc_exact:
+                            size = -a.pos.b          # BTC-exact: cost q*e^{-tp} < q, affordable
+                            budget = max(0.0, min(a.eur, a.pos.q))
+                        else:
+                            # spend order: q/p_tp = |b|*e^{+tp} over-buys by construction
+                            # (the par-4.9 flip-channel seed)
+                            size = a.pos.q / tpp
+                            budget = max(0.0, min(a.eur, a.pos.q))
                     else:
                         size = -a.pos.b
                         budget = max(a.eur, 0.0)
@@ -476,7 +479,10 @@ class Simulation:
                         elif cfg.close_mode == "home":       # v4: spend the entry EUR — always
                             # self-funded (q <= held EUR by construction), so no
                             # affordability trap exists to cap against.
-                            sl_buys.append((a, min(a.pos.q, max(a.eur, 0.0)) / p_prev))
+                            if cfg.exit_btc_exact:
+                                sl_buys.append((a, min(-a.pos.b, max(a.eur, 0.0) / p_prev)))
+                            else:
+                                sl_buys.append((a, min(a.pos.q, max(a.eur, 0.0)) / p_prev))
                         else:                                # market (v2): short cover BUY, needs EUR.
                             # Cap at what EUR affords at p_prev: the balanced crossing (step 5)
                             # applies cover fills UNCLAMPED, so an unaffordable cover would drive

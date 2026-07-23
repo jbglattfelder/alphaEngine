@@ -114,6 +114,9 @@ class Config:
                                     # many ticks (0 = off). Detects the CLOB absorbing states (Class 1/2,
                                     # HANDOFF-master par 4.7) instead of burning dead ticks; stopped_reason
                                     # names the stall. Detection, not prevention -- the freeze is a theorem.
+    exit_btc_exact: bool = False    # home-mode short exits: False (default) = SPEND orders (the flip-
+                                    # channel seed, par 4.9). True = BTC-EXACT exits (size=|pos.b|).
+                                    # Measured: flips -96%; direction flips to 5/5 UP, +3.5 +/- 0.14.
     recycle: bool = True        # False = each agent opens at most once (no re-entry)
     x_accounting: bool = True   # True = size/PnL/exits in geometric-mean units X (1 X = p^-.5 EUR = p^.5 BTC); size = (W_X/q)/sqrt(p), identical both tribes
     symmetric_sizing: bool = False  # True = long open size price-independent (/x_0 not /p) to test drift

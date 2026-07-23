@@ -433,11 +433,28 @@ and drags. Falsified en route: "shorts linger in the close pipeline" (longs
 close *slower*, 3.6 vs 2.8 ticks, and complete more SL/impatience episodes —
 shorts exit via TP more; the entry-count gap needs a different account, OPEN).
 
-**Registered next (before any run): the BTC-exact exit arm** — short exits
-sized |pos.b| with EUR budget pos.q. Predictions: flips vanish; the down-drag
-loses its flip component (~40%); the 10-seed tally moves toward 50/50. If the
-drag persists via TP-crosses alone, the book-mirror inherits the case.
-Artifacts: tally.jsonl (taxonomy v2), seed_asym.jsonl.
+**The BTC-exact exit arm RAN (`exit_btc_exact`, default False bit-identical).
+Scored:** flips vanish — CONFIRMED (5069 → ~0; tp_cross below-last 59% → 2%).
+"Tally toward 50/50" — **FALSIFIED informatively: 5/5 seeds UP, lnp = +3.5 ±
+0.14, near-deterministic.** The spend arm was two ~equal opposing structural
+biases (fresh-up ≈ +50 vs stale-down ≈ −50) in near-cancellation; remove one
+weld and the other runs the market alone as a tilted floor, not a pencil-tip.
+Neither arm is the symmetric null yet.
+
+**The up-force is a named single channel (four-force on the exact arm, seeds
+1–2):** entries invert to net-DOWN (−25/−33), closes ≈ 0, flips exactly 0 —
+the entire +3.5 drift is **BUY|S|tp_cross**: short TPs crossing at submission,
+printing above last (~+0.002/event), driven by a **70:1 count asymmetry**
+(~13,900 short TP-crosses vs ~200 long per run). The remaining mechanism
+question is why one tribe's TPs go marketable at submission 70× more often.
+REGISTERED candidate: the TP re-rest-on-growth rule — a short whose resting
+entry keeps filling re-submits its TP on each growth; every re-submission is a
+crossing opportunity. Testable by counting TP submissions and cross-fractions
+per tribe; the book-mirror (or a re-rest-rule arm) adjudicates this channel.
+Status of the symmetry axiom: down-force caused (spend exits — removed);
+up-force caused (short TP-cross count — mechanism one experiment away). No
+uncaused asymmetry anywhere. Artifacts: tally.jsonl (v2 + exact-arm rows),
+seed_asym.jsonl.
 
 ---
 
