@@ -507,7 +507,26 @@ involution the dynamics commute with. The direction is a free symmetric mode;
 its per-run sign is seeded by the stream-to-tribe assignment; nothing more was
 ever there. (Caveats: statistical equivariance at 5 pairs, T=15k, one arm —
 bit-level equivariance and a 20-pair confirmation are the epilogue's
-tightening, not its substance.) Artifacts: tally.jsonl (v2 + exact-arm rows),
+tightening, not its substance.)
+
+### 4.10 The exponent-scatter correction (RETRACTION + the surviving stylized fact)
+
+The "symmetric null ≈ featureless BM" reading (one seed's figure) is
+**RETRACTED**. Measured: single-path DC exponents at the frozen default —
+E_N = −1.974 (seed 1), −1.988 (seed 9, n=150), **−1.665 (seed 41)**; overshoot
+ratios 0.98, 0.98, **1.90** — against a matched-BM single-path band of
+**−1.897 ± 0.037** and **1.02 ± 0.04** (12 paths, T=150k, matched sd and
+clear-fraction). Seed 41 sits ~6σ (E_N) and ~23σ (os) outside: not path noise.
+**The symmetric null is an ensemble of regimes** — BM-like paths and
+excursion-regime paths — and the WIDTH of the single-path exponent
+distribution is the stylized fact that survives full symmetrization
+(consistent with the heavy intrinsic-time durations, §2-era finding).
+Symmetry constrains the ensemble mean, not the path. Registered suspect for
+the regime selector: the Pareto capital draw's per-seed tribe imbalance
+(seed 41's tribe medians: 496 vs 667 — α=1.5 does not self-average at n=500).
+`experiments/exp_exponent_scatter.py` carries the ≥10-seed design with P1–P3
+registered; engine rows are ~15 min/seed at the frozen default — a
+user-machine batch. Artifacts: tally.jsonl (v2 + exact-arm rows),
 seed_asym.jsonl.
 
 ---
