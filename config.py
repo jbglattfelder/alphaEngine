@@ -114,9 +114,23 @@ class Config:
                                     # many ticks (0 = off). Detects the CLOB absorbing states (Class 1/2,
                                     # HANDOFF-master par 4.7) instead of burning dead ticks; stopped_reason
                                     # names the stall. Detection, not prevention -- the freeze is a theorem.
-    exit_btc_exact: bool = False    # home-mode short exits: False (default) = SPEND orders (the flip-
-                                    # channel seed, par 4.9). True = BTC-EXACT exits (size=|pos.b|).
-                                    # Measured: flips -96%; direction flips to 5/5 UP, +3.5 +/- 0.14.
+    exit_promise: str = "spend_short"  # home-mode exit denomination — WHOSE exit promises WHICH currency
+                                    # (the par-4.9 welds, now a three-position switch):
+                                    # "spend_short" (default, bit-identical): short exits promise the
+                                    #     entry EUR (size q/p over-buys by e^tp at profit -> flip dump).
+                                    #     MEASURED: down-lean 8/2, the two-bias near-cancellation.
+                                    # "exact": both tribes exit BTC-exact (size=|pos.b|).
+                                    #     MEASURED: flips 0; 5/5 UP +3.5±0.14 (the tp_cross up-force
+                                    #     runs unopposed).
+                                    # "spend_long": longs promise the entry EUR (size |q|/p UNDER-sells
+                                    #     at profit -> passive residual, no dump; shorts BTC-exact).
+                                    #     NOT the mechanical mirror of spend_short — and measured so:
+                                    #     seed 1 collapses lnp = -26 (a THIRD regime, violent down;
+                                    #     checks pass; a resting-price~0 RuntimeWarning in book.py is
+                                    #     unexplained -> treat this arm as EXPLORATORY). 1 seed.
+                                    # Direction selection today: spend_short = mild down-lean (8/2),
+                                    # exact = firm up (5/5, +3.5). All three are TREATMENTS: any
+                                    # chosen direction is by definition not the null.
     recycle: bool = True        # False = each agent opens at most once (no re-entry)
     x_accounting: bool = True   # True = size/PnL/exits in geometric-mean units X (1 X = p^-.5 EUR = p^.5 BTC); size = (W_X/q)/sqrt(p), identical both tribes
     symmetric_sizing: bool = False  # True = long open size price-independent (/x_0 not /p) to test drift
@@ -187,6 +201,7 @@ class Config:
             "sl_mode in {market,limit,wait}": self.sl_mode in ("market", "limit", "wait"),
             "close_mode in {quantity,home}": self.close_mode in ("quantity", "home"),
             "entry_mode in {ioc,rest}": self.entry_mode in ("ioc", "rest"),
+            "exit_promise valid": self.exit_promise in ("spend_short", "exact", "spend_long"),
             "close_mode=home requires sl_mode=market": self.close_mode != "home" or self.sl_mode == "market",
             "sl > 0": self.sl > 0,
             "epsilon >= 0": self.epsilon is not None and self.epsilon >= 0,

@@ -224,7 +224,7 @@ class Simulation:
             a, sz = closes[i]
             if a.pos.b < 0:                          # short cover: budget-capped BUY
                 budget = max(a.eur, 0.0)
-                if cfg.close_mode == "home" and not cfg.exit_btc_exact:
+                if cfg.close_mode == "home" and cfg.exit_promise == "spend_short":
                     budget = max(0.0, min(a.eur, a.pos.q))
                 self._submit(LimitOrder(a.id, Dir.BUY, 1e18, sz, t,
                                         is_close=True, pos_side=a.side),
@@ -410,7 +410,14 @@ class Simulation:
                     a.entry_q = abs(a.pos.q)
                     a.entry_tick = t
                 if a.side is Side.LONG:
-                    o = LimitOrder(a.id, Dir.SELL, a.tp_price(cfg), a.pos.b, t,
+                    tp_sz = a.pos.b
+                    if cfg.close_mode == "home" and cfg.exit_promise == "spend_long":
+                        # spend order (long): recover the entry EUR |q| at p_tp;
+                        # under-sells by e^-tp at profit -- passive residual, no dump
+                        tpp_l = a.tp_price(cfg)
+                        if tpp_l > 0:
+                            tp_sz = min(a.pos.b, max(0.0, -a.pos.q) / tpp_l)
+                    o = LimitOrder(a.id, Dir.SELL, a.tp_price(cfg), tp_sz, t,
                                    is_close=True, pos_side=Side.LONG)
                     a.tp_ref = o.oref
                     a.tp_pos_b = a.pos.b
@@ -418,14 +425,13 @@ class Simulation:
                 else:
                     tpp = a.tp_price(cfg)
                     if cfg.close_mode == "home":
-                        if cfg.exit_btc_exact:
-                            size = -a.pos.b          # BTC-exact: cost q*e^{-tp} < q, affordable
-                            budget = max(0.0, min(a.eur, a.pos.q))
-                        else:
+                        if cfg.exit_promise == "spend_short":
                             # spend order: q/p_tp = |b|*e^{+tp} over-buys by construction
                             # (the par-4.9 flip-channel seed)
                             size = a.pos.q / tpp
-                            budget = max(0.0, min(a.eur, a.pos.q))
+                        else:                        # exact / spend_long: shorts BTC-exact
+                            size = -a.pos.b
+                        budget = max(0.0, min(a.eur, a.pos.q))
                     else:
                         size = -a.pos.b
                         budget = max(a.eur, 0.0)
@@ -473,16 +479,18 @@ class Simulation:
                                 sl_buys.append((a, -a.pos.b))
                         elif a.pos.b > 0:                    # market (v2): long cover SELL, self-funded
                             qty = a.pos.b
+                            if cfg.close_mode == "home" and cfg.exit_promise == "spend_long":
+                                qty = min(qty, -a.pos.q / p_prev)   # recover entry EUR only
                             if cfg.symmetric_solvency:
                                 qty = min(qty, max(a.btc, 0.0))
                             sl_sells.append((a, qty))
                         elif cfg.close_mode == "home":       # v4: spend the entry EUR — always
                             # self-funded (q <= held EUR by construction), so no
                             # affordability trap exists to cap against.
-                            if cfg.exit_btc_exact:
-                                sl_buys.append((a, min(-a.pos.b, max(a.eur, 0.0) / p_prev)))
-                            else:
+                            if cfg.exit_promise == "spend_short":
                                 sl_buys.append((a, min(a.pos.q, max(a.eur, 0.0)) / p_prev))
+                            else:
+                                sl_buys.append((a, min(-a.pos.b, max(a.eur, 0.0) / p_prev)))
                         else:                                # market (v2): short cover BUY, needs EUR.
                             # Cap at what EUR affords at p_prev: the balanced crossing (step 5)
                             # applies cover fills UNCLAMPED, so an unaffordable cover would drive
