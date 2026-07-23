@@ -114,7 +114,12 @@ class Config:
                                     # many ticks (0 = off). Detects the CLOB absorbing states (Class 1/2,
                                     # HANDOFF-master par 4.7) instead of burning dead ticks; stopped_reason
                                     # names the stall. Detection, not prevention -- the freeze is a theorem.
-    exit_promise: str = "spend_short"  # home-mode exit denomination — WHOSE exit promises WHICH currency
+    exit_promise: str = "own_coin"  # home-mode exit denomination — WHOSE exit promises WHICH currency
+                                    # "own_coin" (default; alias "spend_short"): each tribe delivers
+                                    #     its OWN coin exactly — longs BTC, shorts their entry EUR,
+                                    #     residuals banked. THE SYMMETRIC EXIT: mirror-equivariance
+                                    #     was verified on exactly this configuration. ("exact" is
+                                    #     BTC-exact for BOTH tribes = base-privileged = a treatment.)
                                     # (the par-4.9 welds, now a three-position switch):
                                     # "spend_short" (default, bit-identical): short exits promise the
                                     #     entry EUR (size q/p over-buys by e^tp at profit -> flip dump).
@@ -131,7 +136,10 @@ class Config:
                                     # Direction selection today: spend_short = mild down-lean (8/2),
                                     # exact = firm up (5/5, +3.5). All three are TREATMENTS: any
                                     # chosen direction is by definition not the null.
-    book_mode: str = "btc"          # the venue's denomination (the X-program applied to the BOOK,
+    book_mode: str = "coin"         # the venue's denomination -- DEFAULT FLIPPED 2026-07-23 to the
+                                    # verified symmetric venue (mirror equivariance, par 4.9 close).
+                                    # "btc" = the legacy base-privileged book, kept as treatment.
+                                    # Original comment: the venue's denomination (the X-program applied to the BOOK,
                                     # book_coin.py): "btc" (default, bit-identical) = book.py, all
                                     # sizes in BTC, budget clamps asymmetric. "coin" = every order
                                     # denominated in the coin it DELIVERS; one side-agnostic
@@ -219,7 +227,7 @@ class Config:
             "sl_mode in {market,limit,wait}": self.sl_mode in ("market", "limit", "wait"),
             "close_mode in {quantity,home}": self.close_mode in ("quantity", "home"),
             "entry_mode in {ioc,rest}": self.entry_mode in ("ioc", "rest"),
-            "exit_promise valid": self.exit_promise in ("spend_short", "exact", "spend_long"),
+            "exit_promise valid": self.exit_promise in ("own_coin", "spend_short", "exact", "spend_long"),
             "book_mode in {btc,coin}": self.book_mode in ("btc", "coin"),
             "close_mode=home requires sl_mode=market": self.close_mode != "home" or self.sl_mode == "market",
             "sl > 0": self.sl > 0,
@@ -258,7 +266,8 @@ class Config:
                   "mirror" if self.mirror else "legacy (/p)")
         return (
             "Alpha Engine — resolved configuration\n"
-            f"  engine            : close_mode={self.close_mode}  sl_mode={self.sl_mode}  entry_mode={self.entry_mode}  hold_fires_close={self.hold_fires_close}  conv_mode={self.conv_mode}\n"
+            f"  engine            : close_mode={self.close_mode}  sl_mode={self.sl_mode}  entry_mode={self.entry_mode}  hold_fires_close={self.hold_fires_close}\n"
+            f"                      book_mode={self.book_mode}  exit_promise={self.exit_promise}  mirror={self.mirror}  conv_mode={self.conv_mode}"
             f"  population        : {self.total_agents} agents ({self.n} long / {self.n} short)\n"
             f"  total capital K   : {self.K:,.0f} EUR  (K/2 per side)\n"
             f"  x_0 / p_int(0)    : {self.x_0}\n"

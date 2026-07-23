@@ -227,11 +227,11 @@ class Simulation:
             if not self._close_unfinished(a):
                 self._settle_if_flat(a)              # home-flat: bank, don't re-trade
                 continue
-            if a.pos.b < 0 or (cfg.close_mode == "home" and a.side is Side.SHORT and cfg.exit_promise == "spend_short"):
+            if a.pos.b < 0 or (cfg.close_mode == "home" and a.side is Side.SHORT and cfg.exit_promise in ("own_coin", "spend_short")):
                 # short cover: budget-capped BUY (home-spend shorts stay BUYs at ANY
                 # b -- the promise is q-denominated)
                 budget = max(a.eur, 0.0)
-                if cfg.close_mode == "home" and cfg.exit_promise == "spend_short":
+                if cfg.close_mode == "home" and cfg.exit_promise in ("own_coin", "spend_short"):
                     budget = max(0.0, min(a.eur, a.pos.q))
                 self._submit(LimitOrder(a.id, Dir.BUY, 1e18, sz, t,
                                         is_close=True, pos_side=a.side),
@@ -306,7 +306,7 @@ class Simulation:
                     self.close_fail[key] += 1
                     self.close_fail_agents[key].add(a.id)
             return
-        if a.pos.b > 1e-12 and not (self.cfg.close_mode == "home" and a.side is Side.SHORT and self.cfg.exit_promise == "spend_short"):            # long: sell all held BTC into the bids
+        if a.pos.b > 1e-12 and not (self.cfg.close_mode == "home" and a.side is Side.SHORT and self.cfg.exit_promise in ("own_coin", "spend_short")):            # long: sell all held BTC into the bids
             self.close_attempts["L"] += 1
             self._submit(LimitOrder(a.id, Dir.SELL, 1e-15, a.pos.b, t,
                                     is_close=True, pos_side=Side.LONG), rest_residual=False,
@@ -435,7 +435,7 @@ class Simulation:
                 else:
                     tpp = a.tp_price(cfg)
                     if cfg.close_mode == "home":
-                        if cfg.exit_promise == "spend_short":
+                        if cfg.exit_promise in ("own_coin", "spend_short"):
                             # spend order: q/p_tp = |b|*e^{+tp} over-buys by construction
                             # (the par-4.9 flip-channel seed)
                             size = a.pos.q / tpp
@@ -487,7 +487,7 @@ class Simulation:
                                 sl_sells.append((a, qty))
                             elif a.eur >= -a.pos.b * p_prev:
                                 sl_buys.append((a, -a.pos.b))
-                        elif a.pos.b > 0 and not (cfg.close_mode == "home" and a.side is Side.SHORT and cfg.exit_promise == "spend_short"):
+                        elif a.pos.b > 0 and not (cfg.close_mode == "home" and a.side is Side.SHORT and cfg.exit_promise in ("own_coin", "spend_short")):
                             # market (v2): long cover SELL, self-funded. Home-spend shorts are
                             # EXCLUDED even at b>0: their close is dispatched in their HOME coin
                             # (BUY while q remains) -- b-sign dispatch on a q-promise is the
@@ -501,7 +501,7 @@ class Simulation:
                         elif cfg.close_mode == "home":       # v4: spend the entry EUR — always
                             # self-funded (q <= held EUR by construction), so no
                             # affordability trap exists to cap against.
-                            if cfg.exit_promise == "spend_short":
+                            if cfg.exit_promise in ("own_coin", "spend_short"):
                                 sl_buys.append((a, min(a.pos.q, max(a.eur, 0.0)) / p_prev))
                             else:
                                 sl_buys.append((a, min(-a.pos.b, max(a.eur, 0.0) / p_prev)))
