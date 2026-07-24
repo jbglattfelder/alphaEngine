@@ -345,23 +345,42 @@ break. Whack-a-mole: at sl=tp the SL net flips +16.7 but impatience takes over
 (−21.4) — no symmetric knob restores it (the instability regenerates in the
 unpinned channel). Confirmation pending: ≥10-seed sign tally.
 
-## V.3 Genuine drift-independent fat tails (`exp_detrend_tail.py`)
+## V.3 Fat tails — real, but the naive statistic was inflated (CORRECTED)
 
-Two seeds each, full 150k, local rolling-median detrend (windows 25–751), tail
-survives with residual sign-ACF → ~0.5:
+**Superseded measurement (pre-symmetrisation, `exp_detrend_tail.py`):** two seeds,
+full 150k, local-detrend windows 25–751 — P(|r|>4sd) = 1.22–1.30e-2 (sl=2tp) and
+0.43–0.56e-2 (sl=tp), residual sign-ACF ~0.34–0.48. Quoted at the time as "~200×
+Gaussian". **The comparison was uncontrolled.**
 
-| arm | s1 P(\|r\|>4sd) | s42 P(\|r\|>4sd) | resid q1 |
-|---|---|---|---|
-| sl=2tp | 1.22–1.26e-2 | 1.26–1.30e-2 | 0.34–0.36 |
-| sl=tp  | 0.43–0.47e-2 | 0.54–0.56e-2 | 0.42–0.48 |
+**The control that changes it.** 40–72% of ticks have no price change and the
+fraction varies by seed. Zeros deflate sd, moving the k·sd threshold for reasons
+unrelated to tails. **A BM matched on zero-fraction and nonzero-sd already reaches
+24× Gaussian at 4sd.** Tail statistics here must be read against that control.
 
-P(|r|>5sd) ≈ P(|r|>4sd) (heavy, not fattened-Gaussian). Second route to fat tails,
-distinct from §T's roundness hierarchy. Mechanism partially split: CLOB entry
-(marketable-to-touch) is the ~0.5% baseline; sl=2tp cover cascade ~doubles it to
-~1.2%. **Method note that flipped the earlier read:** constant-mean detrend
-manufactures fake persistence on a trending-then-reverting series (raw q1≈0.47 →
-0.88); only the *local* detrend is trustworthy. Open: ioc×{sl,2tp} tail cell to
-finish the entry-vs-stop attribution.
+**Current engine (coin book + own-coin), n=150 T=40k, seed 9, `exp_fat_tails.py`:**
+
+| statistic | engine | zero-matched BM |
+|---|---|---|
+| P(>3sd) ×Gauss | 2.9 | 4.8 |
+| P(>4sd) ×Gauss | 78.9 | 24.1 |
+| P(>5sd) ×Gauss | 5756 | 218 |
+| Hill α (plateau) | **2.04** | 8.45 |
+| tail ×Gauss, m=25 | **29.6** | **0.0** |
+| tail ×Gauss, m=125 | **49.5** | **0.0** |
+
+Two discriminators survive the control: **aggregation** (the control's apparent
+tail is gone by m=25; the engine's persists at 30–50× to m=125 — impossible for
+zero-inflation, since the control has the identical zero structure) and the **Hill
+plateau at α ≈ 2.04**, heavier than the inverse-cubic law. Body is *thinner* than
+the control (2.9 vs 4.8 at 3sd — the tp lattice compresses moderate deviations):
+**lattice body, power-law tail.**
+
+Drift-independence unchanged: local detrend w=25…751 drives residual sign-ACF to
+0.48–0.55 with the tail unmoved. Seed scatter: uncontrolled P(|r|>4sd) spans
+2.0–6.1e-3 over three seeds — a per-seed draw, like E_N and the overshoot median.
+
+**Open:** ≥6 seeds at the frozen default (n=500/T=150k), α reported as a
+distribution; and the ioc × sl attribution cell.
 
 ## V.4 Overshoot: mean is drift, median is BM (`os_median`)
 
@@ -370,6 +389,38 @@ Across arms the mean ⟨ω⟩/δ runs 1–8; the **median-ω/δ sits at ~0.6–0
 is the trend, not illiquidity. sl=tp CLOB gives a clean-looking mean law
 (⟨ω⟩/δ=1.38, R²=0.996) but that is *lower drift*, not more BM-like — its median is
 the check. Retire fitted E_os; report the median.
+
+## V.5 Volatility clustering — split into magnitude vs activity (`exp_clustering.py`)
+
+Current symmetric engine, n=150 T=40k, 3 seeds. **Two controls, both required and
+both flat** (inside the ±2/√N noise band at every lag): a shuffle (same marginal,
+time order destroyed) and a BM matched on zero-fraction and nonzero-sd.
+
+**Why the split is mandatory.** 40–72% of ticks have no price change, so ACF(|r|)
+over all steps mixes magnitude clustering with activity (zero-step) clustering.
+
+| series | L1 | L5 | L20 | L100 | L500 | β (ACF~lag^−β) |
+|---|---|---|---|---|---|---|
+| \|r\| nonzero only — **volatility** | 0.17–0.37 | 0.01–0.10 | ≈ noise | ≈ noise | ≈ noise | ~0 |
+| zero-indicator — **activity** | 0.15–0.46 | 0.05–0.38 | 0.04–0.36 | 0.02–0.33 | 0.00–0.31 | **0.27** |
+| \|r\| all steps — *the mix* | 0.18–0.37 | 0.03–0.15 | 0.02–0.10 | 0.01–0.09 | 0.005–0.10 | 0.87 |
+
+- **Magnitude clustering: real, SHORT-range.** Strong at lag 1, inside the noise
+  band by lag ~5–20. Real markets decay as a slow power law (β ≈ 0.2–0.4); this
+  does not.
+- **Activity clustering: real, LONG-range.** β ≈ 0.27 (real-market band), still
+  0.31 at lag 500 on the strongest seed.
+- **The long memory is in the CLOCK, not the amplitudes.** The mixed series' β=0.87
+  is an artifact of combining the two — do not report it.
+
+Same fact as §D's intrinsic-time durations (CV 2.27 vs BM 0.81) from the other
+side: under subordination a clustered arrival clock *is* clustered volatility.
+
+**Open:** 3 seeds, n=150/T=40k, not the frozen default; seed spread ~3× on both
+activity β and the L500 value. Unmeasured on this engine: whether magnitude
+clustering lengthens at n=500/c=0.02 (the flow corner where the old batch sweep
+saw ACF|r| L10 = +0.16).
+
 
 ---
 

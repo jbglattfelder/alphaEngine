@@ -40,9 +40,9 @@ Scorecard of the bare mechanism (**batch** = ioc/home; **CLOB** = rest+impatienc
 |---|---|
 | Unpredictability, ACF(r) ≈ 0 | **PASS** (n=500: +0.01) — for the opposite reason to a real market |
 | DC count N(δ) ~ δ⁻² | **per-seed DISTRIBUTION, not a number** (§4.10): frozen symmetric default measures −1.99…−1.67 across seeds (BM band ±0.04) — BM-like paths AND regime paths; older per-arm E_N claims (§4.3) were single-seed and are demoted to indicative |
-| Volatility clustering (physical time) | **FAIL** — but see the intrinsic-time duration result (§5.2) |
+| Volatility clustering (physical time) | **SPLIT — measure the two separately** (§5.5). Magnitude clustering: **PRESENT but short-range** (ACF(\|r\|) on nonzero steps L1 = 0.17–0.37, inside the noise band by L5–L20). Activity clustering: **PRESENT and long-range** (zero-indicator ACF still 0.31 at L500, β ≈ 0.27). The long memory is in *when* trades happen, not how big they are. |
 | Fat tails (**batch**) | **absent** — P(\|r\|>4sd)=0 exactly (§4.5) |
-| Fat tails (**CLOB, default**) | **PRESENT** — genuine, drift-independent, 2 seeds: P(\|r\|>4sd) ≈ 0.5% (sl=tp) to 1.2% (sl=2tp) (§5.4) |
+| Fat tails (**CLOB, frozen default**) | **PRESENT** — genuine power-law tail, **Hill α ≈ 2** (heavier than the cubic law), established against a **zero-matched BM control** and by **survival under aggregation** (§5.4). NOT established by raw P(\|r\|>4sd): that statistic is inflated by the 40–72% zero-step fraction. |
 | Fat tails (**batch + level-0.5 roundness**) | **PRESENT** — P(\|r\|>4sd) ≈ 2.1% (§5.1) |
 | ⟨ω⟩ = δ (overshoot law) | **FAIL as a mean** (drift-inflated); median-ω/δ is the honest read but ALSO seed-scattered: 0.59–1.06 at the frozen default (BM ≈ 0.70) — regime paths inflate even the median (§4.4, §4.10) |
 | Price direction (**CLOB**) | **UNSTABLE** — symmetry-breaking, not a drift; runs away up *or* down, direction noise-seeded (§4.9) |
@@ -639,34 +639,110 @@ P(|r|>k·sd) and constant-mean-detrend BOTH lie** — subtracting a constant fro
 trending-then-reverting series manufactures fake persistence (raw q1≈0.47 →
 mean-detrended q1≈0.88, an artifact). Use a **local (rolling-median) detrend** and
 read the **residual sign-ACF**: q1→~0.5 means the trend is gone; a tail that
-survives *that* is real. This is what `exp_detrend_tail.py` does, and it is how
-§5.4 was established.
+survives *that* is real. This is what `exp_detrend_tail.py` does; (6) **tail
+statistics on a zero-inflated series need a BM control matched on ZERO-FRACTION and
+nonzero-sd, not a plain Gaussian** — 40–72% of ticks here are zero-steps and the
+matched control alone reaches 24× Gaussian at 4sd. Use `exp_fat_tails.py` (CCDF +
+Hill + aggregation vs matched BM); the discriminators that survive the control are
+aggregation-survival and the Hill plateau, NOT the exceedance ratio.
 
-### 5.4 The CLOB entry mechanism is a second route to fat tails (NEW)
+### 5.4 Fat tails — REAL, but the naive statistic was inflated (CORRECTED)
 
-The pure-CLOB (rest+impatience) arm has **genuine, drift-independent fat tails** —
-a second level-0 route distinct from the level-0.5 roundness hierarchy (§5.1).
-`exp_detrend_tail.py`, full 150k, **two seeds each**, local-detrend at windows
-25–751:
+**Claim: the frozen symmetric default has a genuine heavy tail.** Established on
+the CURRENT engine (coin book + own-coin exits), not the pre-symmetrisation one.
 
-| arm | seed 1 P(\|r\|>4sd) | seed 42 P(\|r\|>4sd) | residual sign-q1 |
-|---|---|---|---|
-| CLOB, **sl=2tp** | 1.22–1.26e-2 | 1.26–1.30e-2 | ~0.34–0.36 |
-| CLOB, **sl=tp** | 0.43–0.47e-2 | 0.54–0.56e-2 | ~0.42–0.48 |
+**The correction first.** The earlier table (pre-symmetrisation, and its sl=2tp row
+is not even the default band) reported `P(|r|>4sd) ≈ 0.5–1.2%` as "≈ 200×
+Gaussian". **That number is substantially an artifact.** 40–72% of ticks have no
+price change, and the fraction *varies by seed*; zeros deflate sd, so the 4sd
+threshold moves for reasons unrelated to tails. **A Brownian control matched on
+zero-fraction and nonzero-sd is already 24× Gaussian at 4sd.** Any tail statistic
+on this engine must be read against that control, never against a plain Gaussian.
 
-The tail **survives every local-detrend window** with the residual sign-ACF driven
-to ~0.5 (trend removed), and P(|r|>5sd) ≈ P(|r|>4sd) (a genuinely heavy tail, not a
-fattened Gaussian) — so it is not the ratchet. Mechanism, partially decomposed:
-**the CLOB entry (marketable-to-touch, walking the book) is the baseline (~0.5% at
-sl=tp); the sl=2tp cover cascade roughly DOUBLES it (~1.2%).** Both contribute; they
-add. Caveat: at sl=tp the tail is mildly window-dependent (falls a little as the
-window grows), so ~0.5% is an upper-ish estimate of the truly drift-free tail — the
-sl=2tp tail is cleaner (flat across windows).
+**What survives, measured (n=150, T=40k, seed 9; `exp_fat_tails.py`):**
 
-**Open: the last attribution cell.** ioc × {sl=tp, sl=2tp}. If ioc stays at exactly
-zero tail regardless of sl, the tail *requires* the CLOB entry and sl only
-amplifies. If ioc at sl=2tp also develops a tail, the wide-stop cascade can make
-tails alone. Cheap; run it before the entry-vs-stop split is stated as final.
+| statistic | engine | zero-matched BM |
+|---|---|---|
+| P(>3sd) ×Gauss | **2.9** | 4.8 |
+| P(>4sd) ×Gauss | 78.9 | 24.1 |
+| P(>5sd) ×Gauss | 5756 | 218 |
+| **Hill α (plateau)** | **2.04** | 8.45 |
+| tail ×Gauss at m=25 | **29.6** | **0.0** |
+| tail ×Gauss at m=125 | **49.5** | **0.0** |
+
+**The load-bearing evidence is the Hill index: α ≈ 2.04** against the control's
+8.45 (BM has no power-law tail; its "index" rises with k). A genuine power law,
+**heavier than the inverse-cubic law** of real equity returns. It rests on ~200
+exceedances at m=1.
+
+**Aggregation is a QUALITATIVE check only — do not quote its levels.** The matched
+control produces *zero* 4sd exceedances at m ≥ 25 while the engine produces some,
+which is meaningful in direction. But the counts are tiny: at T=40k a feed gives
+1,599 points at m=25 (**3 exceedances**) and 319 at m=125 (**1 exceedance**), so the
+reported ratios are quantised multiples of 1/n_points. **RETRACTED: "the tail GROWS
+under aggregation, therefore dependence."** It does not — killing activity
+clustering or magnitude clustering separately leaves it unchanged, and α ≈ 2 is at
+the stable-law boundary, where tails survive summation even for i.i.d. draws. The
+apparent growth was a one-event difference.
+
+**Shape of the distribution:** thinner than the control in the body (2.9 vs 4.8 at
+3sd — the tp lattice compresses moderate deviations) and vastly fatter in the tail.
+Lattice-compressed body, power-law tail.
+
+**Drift-independence** holds as before: local rolling-median detrend at w=25…751
+drives the residual sign-ACF to ~0.48–0.55 and the tail does not move.
+
+**Seed scatter.** Uncontrolled P(|r|>4sd) across three seeds at n=150/T=40k spans
+2.0–6.1e-3 — a factor of three, and the zero-step fraction spans 40–72%. Like E_N
+and the overshoot median (§4.10), **the tail is a per-seed draw, not a number.**
+
+**Status / open.** Existence, drift-independence, aggregation-survival: solid.
+Levels and α: one 40k feed at n=150 — Hill is sensitive to the plateau read, and
+the frozen default is n=500/T=150k. Registered: ≥6 further seeds at the frozen
+default through `exp_fat_tails.py`, reporting α as a distribution. Also still open:
+the ioc × sl attribution cell (does the tail require the CLOB entry, or does the
+wide-stop cascade make it alone?).
+
+### 5.5 Volatility clustering — SPLIT: short-range in magnitudes, long-range in activity (NEW)
+
+Measured on the current symmetric engine (n=150, T=40k, 3 seeds;
+`exp_clustering.py`), with **two controls**: a shuffle (same marginal, time order
+destroyed) and a zero-matched BM. Both controls sit inside the ±2/√N noise band at
+every lag, so what follows is dependence, not marginal shape.
+
+**The distinction that matters.** 40–72% of ticks have no price change, so
+`ACF(|r|)` over *all* steps mixes two phenomena. Separated:
+
+| series | L1 | L5 | L20 | L100 | L500 | decay β |
+|---|---|---|---|---|---|---|
+| \|r\| **nonzero only** (volatility) | 0.17–0.37 | ~0.01–0.10 | ≈ noise | ≈ noise | ≈ noise | ~0 |
+| **zero-indicator** (activity) | 0.15–0.46 | 0.05–0.38 | 0.04–0.36 | 0.02–0.33 | **0.00–0.31** | **0.27** |
+| \|r\| all steps (the mix) | 0.18–0.37 | 0.03–0.15 | 0.02–0.10 | 0.01–0.09 | 0.005–0.10 | 0.87 |
+
+- **Volatility clustering (magnitudes): PRESENT but SHORT-RANGE.** Strong at lag 1,
+  inside the noise band by lag ~5–20. Real markets decay as a slow power law
+  (β ≈ 0.2–0.4); this does not.
+- **Activity clustering (trade timing): PRESENT and LONG-RANGE.** β ≈ 0.27 — in the
+  real-market band — and still 0.31 at lag 500 on the strongest seed.
+- **So the long memory is in the CLOCK, not the amplitudes.** Reporting only
+  "ACF(|r|) all steps" reads as long-memory volatility clustering and overstates it;
+  the 0.87 decay of the mixed series is an artifact of combining the two.
+
+**This is the same fact as the intrinsic-time durations** (§5.2: DC duration
+CV 2.27 vs BM 0.81) seen from the other side. Under subordination a clustered
+trade-arrival clock *is* clustered volatility — so level 0 does have clustering,
+it just lives in the time change rather than in the returns. Consistent, and it
+softens the old flat "FAIL".
+
+**Retracted en route:** "the fat tail grows under aggregation, therefore
+dependence" — killing activity clustering and magnitude clustering separately each
+leaves the aggregation tail unchanged (§5.4), and the large-m cells count 1–3
+events.
+
+**Open:** 3 seeds at n=150/T=40k, not the frozen default; the seed spread is large
+(activity β and L500 vary 3×). Whether magnitude clustering lengthens at
+n=500/c=0.02 (the flow-dominated corner where the old batch-arm sweep saw
+ACF|r| L10 = +0.16) is unmeasured on this engine.
 
 ---
 
@@ -789,6 +865,22 @@ makes genuine fat tails, §5.4); **"fat tails need an actor / are unreachable at
 level 0"** (the CLOB arm produces them free, §5.4); **the mean ⟨ω⟩/δ as a liquidity
 read** (drift-inflated; use the median, §4.4). **All E_os values retired.**
 
+**NEW (fat tails):** *"P(|r|>4sd) ≈ 200× Gaussian"* — **RETRACTED as stated.** The
+comparison was against a plain Gaussian on a series that is 40–72% zero-steps; a
+BM control matched on zero-fraction and nonzero-sd already reaches 24×. The
+underlying claim SURVIVES on better evidence (Hill α ≈ 2, and tail survival under
+aggregation where the matched control collapses to zero) — but the number, the
+engine it was taken on, and the statistic were all wrong. Third instance this
+cycle of a result quoted from a superseded engine; second instance of a statistic
+quoted without its control.
+
+**NEW (aggregation):** *"the tail grows under aggregation, therefore dependence"* —
+**RETRACTED.** The large-m cells count 1–3 exceedance events (1,599 points at m=25,
+319 at m=125 on a 40k feed), so the "growth" was a one-event difference; and
+separately killing activity- or magnitude-clustering leaves it unchanged, as
+expected at α ≈ 2 (stable-law boundary). **Rule: report the EVENT COUNT beside any
+exceedance ratio.**
+
 ### Standing rules (do not re-break)
 
 - **The FOUR-mechanism inventory is the frame** (open, take-profit, stop-loss,
@@ -858,7 +950,7 @@ Run `python3 test_benchmarks.py` after any engine change; expect 10/10. `.json`/
 
 Instruments added this session (all validated, all committed-clean):
 `exp_detrend_tail.py` (drift-vs-fat-tails via local detrend + sign-ACF, §5.4);
-`exp_drift_decomp.py` (signed Δln p by aggressor type — who pushes the price, §4.9;
+`exp_fat_tails.py` (CCDF + Hill index + aggregation vs a zero-matched BM control — the tail instrument, §5.4); `exp_clustering.py` (ACF of |r| split into magnitude vs activity, shuffle + zero-matched-BM controls, noise band — §5.5); `exp_drift_decomp.py` (signed Δln p by aggressor type — who pushes the price, §4.9;
 diagnostic wrapper, bit-neutral); `os_median` in `dc_analysis.measure` +
 mean/median dual series in `scaling_law.py` (§4.4, drift-robust overshoot read);
 `entry_mode` switch in `config.py`/`simulation.py` (batch default bit-identical;

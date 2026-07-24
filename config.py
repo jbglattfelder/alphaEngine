@@ -71,7 +71,7 @@ class Config:
     close_mode: str = "home"        # what an exit PROMISES (the symmetry fix, v4).
                                     # DEFAULT FLIPPED 2026-07-15: "home" is the symmetric null
                                     # baseline (HANDOFF-v4 §5); "quantity" is the named treatment
-                                    # (squeezes, stranding, cover-drift). HANDOFF-master.md par 10 re-baselined
+                                    # (squeezes, stranding, cover-drift). REFERENCE.md re-baselined
                                     # on the same date; the old quantity targets are retired.
                                     # "quantity" = both tribes close by re-trading a fixed BTC
                                     #              quantity (v3 behaviour, bit-identical). Short's
@@ -107,7 +107,7 @@ class Config:
                                     # agent's own period d/c; no new parameter, scale-covariant).
                                     # This is unconditional-in-market-state aggression distributed
                                     # into every agent — the decentralised alternative to the house
-                                    # maker for keeping a pure CLOB alive (see HANDOFF-master.md par 4.7):
+                                    # maker for keeping a pure CLOB alive (see HANDOFF_clob.md):
                                     # without it, entry_mode="rest" converges to the all-holding
                                     # absorbing state at ANY population size.
     stall_T: int = 0                # liveness detector: stop the run if no trade has printed for this

@@ -200,9 +200,15 @@ arm.** Full descriptions in `HANDOFF-master.md` §3. In brief:
 - **N(δ)~δ⁻² is arm-conditional: E_N ≈ −2 on batch n=150, but ≈ −1.6 on the CLOB
   default** (the trending price over-counts large excursions). ⟨ω⟩=δ fails as a MEAN
   (drift-inflated); the median overshoot ≈ BM. Fat tails: **absent on batch**
-  (P(|r|>4sd)=0), **present and genuine on the CLOB default** (~0.5–1.2%,
-  drift-independent, 2 seeds), and present at "level 0.5" with a TP-roundness
-  hierarchy (~2.1%). Fat tails are reachable at level 0 — two routes.
+  (P(|r|>4sd)=0), **present and genuine on the frozen CLOB default** — a power-law
+  tail with **Hill α ≈ 2**, shown against a zero-matched BM control and by survival
+  under aggregation (raw exceedance ratios are inflated by the 40–72% zero-step
+  fraction — use `exp_fat_tails.py`), and present at level 0.5 via a TP-roundness
+  hierarchy. Fat tails are reachable at level 0 — two routes.
+- **Volatility clustering splits in two**: magnitude clustering is present but
+  short-range (dead by lag ~5–20); the long memory (β ≈ 0.27, still 0.31 at lag 500)
+  is **activity** clustering — *when* trades happen, not how big they are. Measure
+  them separately with `exp_clustering.py`; ACF(|r|) over all steps mixes them.
 - **Four independent arguments say the missing piece is an actor, not a parameter**
   — a two-sided quoter (Avellaneda–Stoikov) to provide a spread, absorb the close
   channels, and stabilise the price direction. That is level 1. (Fat tails are *not*
