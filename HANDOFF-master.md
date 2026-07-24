@@ -571,6 +571,22 @@ ever there. (Caveats: statistical equivariance at 5 pairs, T=15k, one arm —
 bit-level equivariance and a 20-pair confirmation are the epilogue's
 tightening, not its substance.)
 
+**SCOPE REFINEMENT (measured, seed 9 at n=150/T=100k): per-pair inversion is a
+LOCK-REGIME signature, not a law.** Seed 9's mirror pair came out (−1.99,
+−2.92) — both down, and the mirrored path is a *different wanderer*, not the
+original upside-down. No symmetry violation: the involution swaps roles at
+t=0, but chaotic decorrelation means a pair whose direction is not locked
+early ends as two effectively independent draws from the symmetric ensemble
+(two downs: p = 1/4). The 5/5 inversions above were all measured in the
+lock regime (n=500, T=15k, direction committed within a few thousand ticks),
+where the early wobble inverts and the lock follows it. Correct statement:
+**equivariance is an ENSEMBLE property — P(down)=P(up) always; per-pair
+anti-correlation holds only where the direction locks early.** Corollary,
+registered: corr(lnp, lnp_mirror) per seed is a free second classifier for
+the §4.10 lock/wander regime split (prediction: strongly negative for
+lock-regime seeds, ≈0 for wanderers; computable from mirror twins in the
+exponent-scatter batch).
+
 ### 4.10 The exponent-scatter correction (RETRACTION + the surviving stylized fact)
 
 The "symmetric null ≈ featureless BM" reading (one seed's figure) is

@@ -181,7 +181,11 @@ arm.** Full descriptions in `HANDOFF-master.md` §3. In brief:
   pairs** (p = 1/32). So P(down) = P(up) *by demonstrated symmetry*, and the earlier
   residual "down-lean" is reclassified as finite-sample noise from a symmetric
   ensemble — not a bias. Verified by an explicit involution the dynamics commute
-  with, not by absence of evidence.
+  with, not by absence of evidence. *Scope:* equivariance is an **ensemble**
+  property; per-pair inversion holds in the lock regime (direction committed
+  early) — wanderer pairs chaotically decorrelate and can land same-signed
+  (measured: seed 9). corr with the mirror twin doubles as a free
+  lock-vs-wander classifier.
 - **The price level carries no information** — no anchor. On the **batch** arm it
   wanders; on the **CLOB** arm (the default) it is directionally *unstable* — runs
   away up or down, direction a free symmetric mode seeded by noise (a
