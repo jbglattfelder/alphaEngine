@@ -407,7 +407,14 @@ class Simulation:
 
         # 2. every open position rests a TP limit (long sells above, short buys below).
         #    These resting exits ARE the book's two-sided depth. Also arm the SL line.
-        for a in self.pop.alive():
+        _alive2 = list(self.pop.alive())
+        if len(_alive2) > 1:
+            # seat-weld fix (par 4.9): no agent may derive advantage from its
+            # array position. Step 2 touches the book (TP rest/refresh/cross);
+            # entries and closes were already shuffled -- this loop never was.
+            _s2 = np.random.default_rng(np.random.SeedSequence((self.cfg.seed, 0x59A7, t)))
+            _alive2 = [_alive2[i] for i in _s2.permutation(len(_alive2))]
+        for a in _alive2:
             if (a.tp_ref is not None and not a.closing
                     and abs(a.pos.b) > abs(a.tp_pos_b) + 1e-9 / cfg.x_0):
                 # entry_mode="rest": the resting entry filled further after the TP

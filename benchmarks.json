@@ -1,72 +1,72 @@
 {
   "coin_book": {
-    "n_round_trips": 3951,
-    "p_final": "0.5284883016216975",
+    "n_round_trips": 3893,
+    "p_final": "0.7473721358911494",
     "stranded": 0,
-    "x_share": "0.5000289654479368"
+    "x_share": "0.4999382554114706"
   },
   "coin_book_mirror": {
-    "n_round_trips": 3965,
-    "p_final": "1.566311431105044",
+    "n_round_trips": 3938,
+    "p_final": "1.7534271255833807",
     "stranded": 0,
-    "x_share": "0.500005491478982"
+    "x_share": "0.5000308454086752"
   },
   "conv_mixed_evolve": {
-    "n_round_trips": 4169,
-    "p_final": "1.1848608930862563",
+    "n_round_trips": 4257,
+    "p_final": "1.0219332712714344",
     "stranded": 0,
-    "x_share": "0.5001071001902955"
+    "x_share": "0.5000073141404207"
   },
   "entry_rest_v5": {
-    "n_round_trips": 2485,
-    "p_final": "0.015008803171988369",
+    "n_round_trips": 3944,
+    "p_final": "1.0354269743255065",
     "stranded": 0,
-    "x_share": "0.49985545835335204"
+    "x_share": "0.4999213675065563"
   },
   "home_default_n150": {
-    "n_round_trips": 5538,
-    "p_final": "0.531965546725455",
+    "n_round_trips": 5623,
+    "p_final": "0.6659394731781304",
     "stranded": 0,
-    "x_share": "0.5000347315735709"
+    "x_share": "0.5000055328500324"
   },
   "quantity_treatment": {
-    "n_round_trips": 5299,
-    "p_final": "0.33743845713307613",
+    "n_round_trips": 5243,
+    "p_final": "1.137093690832632",
     "stranded": 0,
-    "x_share": "0.499870902415459"
+    "x_share": "0.5001278618030122"
   },
   "reference_row_f05_s1": {
-    "n_round_trips": 10538,
-    "p_final": "0.11118578269509605",
-    "stranded": 1,
-    "x_share": "0.5000492272749284"
+    "n_round_trips": 10572,
+    "p_final": "0.12563948785572523",
+    "stranded": 0,
+    "x_share": "0.5000626567736386"
   },
   "rest_impatience": {
-    "n_round_trips": 3517,
-    "p_final": "0.52701984110591",
+    "n_round_trips": 3944,
+    "p_final": "1.0354269743255065",
     "stranded": 0,
-    "x_share": "0.49997037951216605"
+    "x_share": "0.4999213675065563"
   },
   "scale_invariance": {
     "identical_2p4": true,
     "identical_2pm6": true
   },
   "sl_limit_arm": {
-    "n_round_trips": 1082,
-    "p_final": "0.9986887151688308",
-    "stranded": 53,
-    "x_share": "0.5000281455070361"
+    "n_round_trips": 1068,
+    "p_final": "0.9763518117967109",
+    "stranded": 27,
+    "x_share": "0.4997789480017433"
   },
   "sl_wait_arm": {
-    "n_round_trips": 2904,
-    "p_final": "1.4397543886872692",
+    "n_round_trips": 3005,
+    "p_final": "1.2943676322292528",
     "stranded": 0,
-    "x_share": "0.49998387872005134"
+    "x_share": "0.5000678438198037"
   },
   "tp_hierarchy": {
-    "n_round_trips": 3392,
-    "p_final": "0.30000000000000004",
-    "stranded": 0,
-    "x_share": "0.5003097442760132"
+    "n_round_trips": 3383,
+    "p_final": "0.031",
+    "stranded": 1,
+    "x_share": "0.5000760540809208"
   }
 }

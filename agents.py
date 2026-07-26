@@ -366,6 +366,13 @@ class Population:
                                 K0=float(k0), d=d_of(float(k0))))
             aid += 1
 
+        if getattr(cfg, "tribe_order", "ls") == "sl":
+            # DIAGNOSTIC (seat-weld test, par 4.9): shorts occupy the low-id block.
+            agents = ([x for x in agents if x.side is Side.SHORT]
+                      + [x for x in agents if x.side is Side.LONG])
+            for new_id, x in enumerate(agents):
+                x.id = new_id
+
         if cfg.mirror:
             # the coin-relabel involution: side flips, wallet swaps. Everything
             # else (K0, d, ids, order) is label-blind and stays. See config.

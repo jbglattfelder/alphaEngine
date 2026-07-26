@@ -147,6 +147,8 @@ class Config:
                                     # in the initial gauge. If a bias survives book_mode="coin", it
                                     # is DEMARCATED to live outside the venue -- which suffices for
                                     # the null (the remaining gauges are each named in book_coin.py).
+    tribe_order: str = "ls"         # DIAGNOSTIC: 'ls' = longs get ids 0..n-1 (historical); 'sl' = shorts
+                                    # first. The seat-weld test (par 4.9): array order must not matter.
     mirror: bool = False            # THE MIRROR (the residual-lean classifier, par 4.9 epilogue):
                                     # relabel the two coins at init -- every agent's side flips and
                                     # its wallet swaps (eur<->btc), so old longs' positions become
