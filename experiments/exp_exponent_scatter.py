@@ -59,7 +59,7 @@ def engine_row(seed: int) -> dict:
     sim = Simulation(cfg, recorder=Recorder(), run_checks=False).run()
     p = np.array(sim.recorder.series("p_int"))
     y = np.log(p)
-    r = np.diff(y); r_nz = r[r != 0]
+    r = np.diff(y); r_nz = r[np.abs(r) > 1e-9]   # significance floor: float-dust prints are not moves
     sd = float(1.4826 * np.median(np.abs(r_nz - np.median(r_nz))))   # flash-robust (par 4.10)
     if sd == 0.0:
         sd = float(r_nz.std())

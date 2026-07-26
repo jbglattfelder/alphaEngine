@@ -106,7 +106,14 @@ def main() -> None:
     n_t = len(prices)
     r1 = np.diff(prices) / prices[:-1]
     r_fin = r1[np.isfinite(r1)]
-    r_nz = r_fin[r_fin != 0]
+    # SIGNIFICANCE FLOOR (the third robust-statistics casualty): in dense
+    # markets (n>=2000, every tick clears) many prints land at essentially
+    # unchanged prices, producing float-dust log-returns ~1e-15 that are
+    # NONZERO and can swamp the median -> MAD ~ machine epsilon -> the delta
+    # grid collapses to 1e-14 and every tick is a "DC event". A return below
+    # R_EPS is bookkeeping noise, not a price move.
+    R_EPS = 1e-9
+    r_nz = r_fin[np.abs(r_fin) > R_EPS]
     # ROBUST scale (par 4.10 lesson, second instrument casualty): a single flash
     # event (regime switch) inflates np.std by orders of magnitude and pushes
     # the whole delta grid above the feed's typical volatility -> "0 usable
