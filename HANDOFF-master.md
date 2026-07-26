@@ -594,21 +594,29 @@ once break the "finite-sample noise" reclassification above — **RETRACTED**:
 the inference P(down)=P(up) from equivariance carried a hidden premise, that
 the unmirrored ensemble is involution-invariant. It is not: one convention was
 never randomized — **which tribe occupies the low-id block of the agent
-array.** Entries and closes are submission-shuffled (the old 0xA1FA lesson);
-the step-2 TP rest/refresh/cross loop never was — longs rested, refreshed, and
-executed crossing TPs FIRST every tick. A per-tick processing privilege that
-compounds with flow: noise at n=150 (p = 0.109 was honestly reporting it),
-near-law at n=1000. The mirror is structurally blind to it: it swaps the
-passengers, not the seats. PROOF by the seat test (`tribe_order="sl"`,
-diagnostic: shorts get the low ids, nothing else changes — no coin relabel):
-seed 443 flips −1.58 → +0.61, seed 4 flips down → +1.22 (n=1000, T=8k). FIX:
-step 2 iterates in a per-tick shuffled order on its own stream
-((seed, 0x59A7, t)); benchmarks re-frozen with this justification. Post-fix,
-longs-first: seed 443 → +0.21, seed 4 → +0.14 — the deterministic down-lock is
-gone. REGISTERED: the 10-seed n=1000 tally on the fixed engine → prediction
-~50/50. Standing rule, final form: **no agent may derive advantage from its
-array position — every book-touching loop is shuffled, and "the mirror
-passed" never certifies seat conventions.**
+array.** The step-2 TP rest/refresh/cross loop ran in array order — longs
+first, every tick; a per-tick processing privilege that compounds with flow:
+noise at n=150 (p = 0.109 was honestly reporting it), near-law at n=1000. The
+mirror is structurally blind to it: it swaps the passengers, not the seats.
+PROOF by the seat test (`tribe_order="sl"`): seed 443 flips −1.58 → +0.61,
+seed 4 flips down → +1.22 (n=1000, T=8k). FIX: step-2 per-tick shuffle,
+dedicated stream ((seed, 0x59A7, t)); benchmarks re-frozen. Post-fix
+fresh-seed tally, n=100: 4 UP / 5 DOWN — the coin restored.
+
+**PART 2 (same day, found by the user asking why large-n runs still dropped):**
+the standing rule was declared before it was true — **step 6, the close-refire
+loop, FIRES MARKET ORDERS (`_fire_close`) and still ran in array order**:
+closing longs' market sells before closing shorts' market buys, every tick —
+a second, larger-caliber seat channel (the close channels net −44 to −47 in
+every force decomposition). Fixed identically: per-tick shuffle, dedicated
+stream ((seed, 0x6E1C, t)); benchmarks re-frozen again. Post-fix n=1000 T=10k:
+seeds 443 +0.38, 77 +1.00, 88 −2.09 — mixed; the large-n determinism is gone.
+The audit is now exhaustive by grep: step 2 (0x59A7), step 6 (0x6E1C), entries
+and closes at submission (0xA1FA-era) — no book-touching loop iterates the
+population in array order. Standing rule, final form: **no agent may derive
+advantage from its array position — every book-touching loop is shuffled,
+verified by grep not by declaration, and "the mirror passed" never certifies
+seat conventions.**
 
 ### 4.10 The exponent-scatter correction (RETRACTION + the surviving stylized fact)
 

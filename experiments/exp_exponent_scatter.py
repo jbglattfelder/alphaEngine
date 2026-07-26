@@ -59,7 +59,10 @@ def engine_row(seed: int) -> dict:
     sim = Simulation(cfg, recorder=Recorder(), run_checks=False).run()
     p = np.array(sim.recorder.series("p_int"))
     y = np.log(p)
-    r = np.diff(y); sd = r[r != 0].std()
+    r = np.diff(y); r_nz = r[r != 0]
+    sd = float(1.4826 * np.median(np.abs(r_nz - np.median(r_nz))))   # flash-robust (par 4.10)
+    if sd == 0.0:
+        sd = float(r_nz.std())
     E, osr = fit_pair(y, sd)
     k_l = np.median([a.K0 for a in sim.pop.agents if a.side is Side.LONG])
     k_s = np.median([a.K0 for a in sim.pop.agents if a.side is Side.SHORT])

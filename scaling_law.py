@@ -105,7 +105,20 @@ def main() -> None:
     prices = prices[np.isfinite(prices) & (prices > 0)]
     n_t = len(prices)
     r1 = np.diff(prices) / prices[:-1]
-    sd = float(np.std(r1[np.isfinite(r1)]))
+    r_fin = r1[np.isfinite(r1)]
+    r_nz = r_fin[r_fin != 0]
+    # ROBUST scale (par 4.10 lesson, second instrument casualty): a single flash
+    # event (regime switch) inflates np.std by orders of magnitude and pushes
+    # the whole delta grid above the feed's typical volatility -> "0 usable
+    # thresholds". MAD tracks the TYPICAL tick; the flash stays measurable as
+    # DC events instead of silently recalibrating the ruler.
+    sd_raw = float(np.std(r_fin))
+    sd = float(1.4826 * np.median(np.abs(r_nz - np.median(r_nz)))) if len(r_nz) else sd_raw
+    if sd == 0.0:
+        sd = sd_raw
+    if sd_raw > 3 * sd:
+        print(f"NOTE: raw sd(r) = {sd_raw:.4g} is {sd_raw/sd:.1f}x the robust (MAD) scale "
+              f"{sd:.4g} -- flash/regime events present; delta grid uses the robust scale.")
 
     deltas = np.exp(np.linspace(np.log(DELTA_LO_MULT * sd),
                                 np.log(DELTA_HI_MULT * sd), N_DELTAS))
@@ -125,7 +138,7 @@ def main() -> None:
     ratio  = float(np.mean(OS / D))
     ratio_med = float(np.mean(OSM / D))
 
-    print(f"\nfeed {n_t:,} ticks | tick sd(r) = {sd:.4g} (sd/tp = {sd/TP:.2f})")
+    print(f"\nfeed {n_t:,} ticks | tick sd(r) = {sd:.4g} robust (sd/tp = {sd/TP:.2f})")
     print(f"delta grid {D[0]*100:.2f}% .. {D[-1]*100:.2f}%  "
           f"({len(rows)} usable, {dropped} dropped for <{MIN_EVENTS} events)")
     print(f"  N(delta)      ~ delta^{E_N:+.3f}   (adj R2 {R_N:.4f})   [BM ~ -1.85, theory -2]")

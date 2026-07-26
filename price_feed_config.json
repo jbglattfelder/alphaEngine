@@ -26,6 +26,7 @@
   "stall_T": 0,
   "exit_promise": "own_coin",
   "book_mode": "coin",
+  "tribe_order": "ls",
   "mirror": false,
   "recycle": true,
   "x_accounting": true,

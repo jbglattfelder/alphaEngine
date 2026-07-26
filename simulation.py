@@ -163,7 +163,13 @@ class Simulation:
         p = self.p_int
         trigger = cfg.bailout_floor_frac * cfg.f
         n = 0
-        for a in self.pop.alive():
+        _alive6 = list(self.pop.alive())
+        if len(_alive6) > 1:
+            # seat-weld fix, part 2 (par 4.9): step 6 FIRES MARKET ORDERS
+            # (_fire_close) -- the second un-shuffled book-touching loop.
+            _s6 = np.random.default_rng(np.random.SeedSequence((self.cfg.seed, 0x6E1C, t)))
+            _alive6 = [_alive6[i] for i in _s6.permutation(len(_alive6))]
+        for a in _alive6:
             K = a.mark_to_market(p)
             if K <= 0:
                 continue
@@ -409,9 +415,6 @@ class Simulation:
         #    These resting exits ARE the book's two-sided depth. Also arm the SL line.
         _alive2 = list(self.pop.alive())
         if len(_alive2) > 1:
-            # seat-weld fix (par 4.9): no agent may derive advantage from its
-            # array position. Step 2 touches the book (TP rest/refresh/cross);
-            # entries and closes were already shuffled -- this loop never was.
             _s2 = np.random.default_rng(np.random.SeedSequence((self.cfg.seed, 0x59A7, t)))
             _alive2 = [_alive2[i] for i in _s2.permutation(len(_alive2))]
         for a in _alive2:
