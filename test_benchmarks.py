@@ -140,7 +140,27 @@ def test_benchmarks():
     assert validate() == 0
 
 
+def check_x0_gauge() -> bool:
+    """Case 13 (tolerance, not hash): x0 is a gauge. n=2/seed 9/T=3000 must give
+    bit-close ln(p/x0) at x0=1 vs x0=100. Exact per-path invariance is impossible
+    in floats (knife-edge triggers flip on ulps; first observed at t=3521), so the
+    horizon stays short of the first knife-edge; this catches gross leaks
+    (absolute BTC dust gates) which forked runs within ~100 ticks pre-fix."""
+    import math
+    from config import Config
+    from simulation import Simulation
+    vals = []
+    for x0 in (1.0, 100.0):
+        sim = Simulation(Config(n=2, T=3_000, seed=9, c=0.004, tp=0.01, sl=0.01, x_0=x0),
+                         run_checks=False).run()
+        vals.append(math.log(sim.p_int / x0))
+    ok = abs(vals[0] - vals[1]) < 1e-9
+    print(f"x0-gauge case: {'PASS' if ok else 'FAIL'}  |dln(p/x0)| = {abs(vals[0]-vals[1]):.3e}")
+    return ok
+
+
 if __name__ == "__main__":
+    assert check_x0_gauge(), 'x0-gauge violation'
     if "--update" in sys.argv:
         res = compute_all()
         with open(BENCH, "w") as f:

@@ -82,8 +82,8 @@ class Simulation:
         self.pop = Population(cfg, self.rng)
         self.house = House.seed(cfg)         # v1: funded central market maker
         self._bailouts_total = 0
-        self.book = (CoinBook(last_price=cfg.x_0, size_eps=1e-12 / cfg.x_0, x_ref=cfg.x_0)
-                     if cfg.book_mode == "coin" else Book(last_price=cfg.x_0, size_eps=1e-12 / cfg.x_0))      # the house owns the venue (CLOB)
+        self.book = (CoinBook(last_price=cfg.x_0, size_eps=1e-12 / self.cfg.x_0, x_ref=cfg.x_0)
+                     if cfg.book_mode == "coin" else Book(last_price=cfg.x_0, size_eps=1e-12 / self.cfg.x_0))      # the house owns the venue (CLOB)
         self.recorder = recorder if recorder is not None else _DictRecorder()
         self.p_int: float = cfg.x_0          # p_int(0) = x_0
         self._eur0 = sum(a.eur for a in self.pop.agents) + self.house.eur
@@ -274,7 +274,7 @@ class Simulation:
                 sz = min(sz, max(a.eur, 0.0) / px)   # maker-fill solvency cap
             else:
                 sz = min(sz, max(a.btc, 0.0))
-            if sz <= 1e-12 / cfg.x_0:
+            if sz <= 1e-12 / self.cfg.x_0:
                 continue
             a.opened_ever = True
             a.req_q = sz * px
@@ -284,7 +284,7 @@ class Simulation:
                          btc_budget=(max(a.btc, 0.0) if (a.side is Side.SHORT
                                      and cfg.symmetric_solvency) else None),
                          rest_residual=True)
-            a.entry_ref = o.oref if (o.active and o.size > book.size_eps) else None
+            a.entry_ref = o.oref if (o.active and o.size > (book._eps(o) if hasattr(book, '_eps') else book.size_eps)) else None  # per-coin dust
 
     def _fire_close(self, a, t: int) -> None:
         """Inject a marketable close for a position being exited (SL, or stuck cover).
@@ -292,6 +292,7 @@ class Simulation:
         Instrumented (P2 taxonomy): if a residual remains after the walk, classify
         the stop — opposite side exhausted -> "liquidity"; opposite depth remains
         (the budget clamp broke the loop) -> "funding". Counters only."""
+        cfg = self.cfg
         if not self._close_unfinished(a):
             self._settle_if_flat(a)          # home-flat: bank, don't re-trade
             return
@@ -312,21 +313,21 @@ class Simulation:
                     self.close_fail[key] += 1
                     self.close_fail_agents[key].add(a.id)
             return
-        if a.pos.b > 1e-12 and not (self.cfg.close_mode == "home" and a.side is Side.SHORT and self.cfg.exit_promise in ("own_coin", "spend_short")):            # long: sell all held BTC into the bids
+        if a.pos.b > 1e-12 / cfg.x_0 and not (self.cfg.close_mode == "home" and a.side is Side.SHORT and self.cfg.exit_promise in ("own_coin", "spend_short")):            # long: sell all held BTC into the bids
             self.close_attempts["L"] += 1
             self._submit(LimitOrder(a.id, Dir.SELL, 1e-15, a.pos.b, t,
                                     is_close=True, pos_side=Side.LONG), rest_residual=False,
                          btc_budget=(max(a.btc, 0.0) if self.cfg.symmetric_solvency else None))
-            if a.pos.b > 1e-12:                       # residual remains
+            if a.pos.b > 1e-12 / self.cfg.x_0:                       # residual remains
                 key = "L_funding" if self.book.bid_btc() > eps else "L_liquidity"
                 self.close_fail[key] += 1
                 self.close_fail_agents[key].add(a.id)
-        elif a.pos.b < -1e-12:         # short: buy back, walking asks, budget-capped (solvent)
+        elif a.pos.b < -1e-12 / self.cfg.x_0:         # short: buy back, walking asks, budget-capped (solvent)
             self.close_attempts["S"] += 1
             self._submit(LimitOrder(a.id, Dir.BUY, 1e18, -a.pos.b, t,
                                     is_close=True, pos_side=Side.SHORT),
                          eur_budget=max(a.eur, 0.0), rest_residual=False)
-            if a.pos.b < -1e-12:                      # residual remains
+            if a.pos.b < -1e-12 / self.cfg.x_0:                      # residual remains
                 key = "S_funding" if self.book.ask_btc() > eps else "S_liquidity"
                 self.close_fail[key] += 1
                 self.close_fail_agents[key].add(a.id)
@@ -343,13 +344,14 @@ class Simulation:
         """sl_mode="limit": submit the reduce-only stop-limit at the SL level.
         Fills whatever crosses now; the remainder RESTS in the book (no walking
         past the stop level, no re-fired all-in market covers, no EUR burn)."""
-        if a.pos.b > 1e-12:            # long close: SELL limit at the stop level
+        cfg = self.cfg
+        if a.pos.b > 1e-12 / self.cfg.x_0:            # long close: SELL limit at the stop level
             o = LimitOrder(a.id, Dir.SELL, a.sl_level, a.pos.b, t,
                            is_close=True, pos_side=Side.LONG)
             a.close_ref = o.oref
             self._submit(o, btc_budget=(max(a.btc, 0.0)
                                         if self.cfg.symmetric_solvency else None))
-        elif a.pos.b < -1e-12:         # short close: BUY limit at the stop level
+        elif a.pos.b < -1e-12 / self.cfg.x_0:         # short close: BUY limit at the stop level
             o = LimitOrder(a.id, Dir.BUY, a.sl_level, -a.pos.b, t,
                            is_close=True, pos_side=Side.SHORT)
             a.close_ref = o.oref
@@ -592,7 +594,7 @@ class Simulation:
         St = float(sum(sz for _, sz in sells))
         self._imb = Bt - St
         M = min(Bt, St)
-        if M > 1e-12:
+        if M > 1e-12 / self.cfg.x_0:      # BTC-denominated: dust must scale with the gauge
             fills = []
             for a, sz in buys:                              # balanced buys at p_prev
                 b = sz * (M / Bt)
@@ -602,19 +604,19 @@ class Simulation:
                 fills.append(Fill(a.id, a.side, eur_delta=+b * p_prev, btc_delta=-b))
             self._apply_fills(fills)
         # imbalance -> market order(s) walking the book (the price-moving flow)
-        if Bt - St > 1e-12:                                 # net buying: walk the asks up
+        if Bt - St > 1e-12 / self.cfg.x_0:                                 # net buying: walk the asks up
             for a, sz in buys:
                 resid = sz * (1 - M / Bt)
-                if resid > 1e-12:
+                if resid > 1e-12 / self.cfg.x_0:   # BTC-denominated residual
                     budget = max(a.eur, 0.0)
                     if cfg.close_mode == "home" and a.closing and a.side is Side.SHORT:
                         budget = max(0.0, min(a.eur, a.pos.q))   # spend cap = home quantity left
                     self._submit(LimitOrder(a.id, Dir.BUY, 1e18, resid, t, pos_side=a.side),
                                  eur_budget=budget, rest_residual=False)
-        elif St - Bt > 1e-12:                               # net selling: walk the bids down
+        elif St - Bt > 1e-12 / self.cfg.x_0:                               # net selling: walk the bids down
             for a, sz in sells:
                 resid = sz * (1 - M / St)
-                if resid > 1e-12:
+                if resid > 1e-12 / self.cfg.x_0:   # BTC-denominated residual
                     self._submit(LimitOrder(a.id, Dir.SELL, 1e-15, resid, t, pos_side=a.side),
                                  rest_residual=False,
                                  btc_budget=(max(a.btc, 0.0) if cfg.symmetric_solvency else None))

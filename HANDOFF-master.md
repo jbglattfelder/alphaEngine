@@ -618,6 +618,30 @@ advantage from its array position — every book-touching loop is shuffled,
 verified by grep not by declaration, and "the mirror passed" never certifies
 seat conventions.**
 
+### 4.11 x₀ is a gauge — the leaks, the fix, and the float limit
+
+The first x₀≠1 run of the coin-book era (user, n=2 seed 9 x₀=100, "kinda looks
+bad") exposed a **real gauge violation**: p/x₀ diverged 46× from the x₀=1 run.
+Cause: **absolute BTC dust constants** — the match-mass gate, both walk
+residual gates, the imbalance gates, the close-path b-gates, and the entry-ref
+eps compared EUR sizes to BTC dust. BTC quantities scale as 1/x₀, so at x₀=100
+the dust floor was 100× coarser and swallowed real orders (first missing trade
+at t=3627: a whole +1%-band step present at x₀=1, absent at x₀=100). ALL now
+scaled by 1/x₀ (per-coin eps via book._eps); zero effect at x₀=1 — the 12
+benchmarks pass UNREFROZEN, which is itself the no-op proof.
+
+**The float limit, measured:** post-fix the two gauges are bit-identical for
+3,520 ticks, then fork at an exact-touch knife-edge — a cover fill lands the
+price ON a stop level and the two gauges disagree by 2 ulps (price 2e−16 below
+the level at x₀=1: no trigger; rounded equal at x₀=100: trigger). Floating
+point is not scale-invariant; exact per-path x₀-invariance is unattainable.
+**Covariance standard, definitive:** (a) short-horizon bit-equality of
+ln(p/x₀) — wired into the harness as the x₀-gauge case (n=2, s9, T=3000,
+tol 1e-9; catches gross leaks, which forked within ~100 ticks pre-fix); (b)
+long-horizon equivalence is DISTRIBUTIONAL over seeds, never per-path. Runs at
+any x₀ are now equally legitimate draws; the user's x₀=100 dashboard is,
+post-fix, an ordinary n=2 family member (Class-2-sell freeze and all).
+
 ### 4.10 The exponent-scatter correction (RETRACTION + the surviving stylized fact)
 
 The "symmetric null ≈ featureless BM" reading (one seed's figure) is
