@@ -1233,6 +1233,12 @@ class Simulation:
 # ═════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
+    import os
+
+    # all outputs land NEXT TO THIS FILE (the NULL/ dir), never in the CWD:
+    # relative paths would scatter pngs/csvs into whatever dir you ran from.
+    HERE = os.path.dirname(os.path.abspath(__file__))
+
     # ---------------- edit these ----------------
     N = 150          # agents per side
     T = 100_000      # ticks
@@ -1240,15 +1246,19 @@ if __name__ == "__main__":
     CAPITAL_DIST = "pareto"   # block 2a: "pareto" | "normal"
     BAND_DIST = "fixed"       # block 2b: "fixed"  | "normal"
     CLOSING = "clock"         # block 2c: "clock"  | "normal"
+    SHOW = True               # pop the figures in the IDE (they save either way)
     # --------------------------------------------
     cfg = Config(n=N, T=T, seed=SEED, capital_dist=CAPITAL_DIST,
                  band_dist=BAND_DIST, closing=CLOSING)
     print(cfg.summary())
     sim = Simulation(cfg).run()
     print(sim.summary())
-    print("wrote:", sim.write_price_csv(), sim.write_trades_csv())
+    print("wrote:",
+          sim.write_price_csv(os.path.join(HERE, "price_btc_eur.csv")),
+          sim.write_trades_csv(os.path.join(HERE, "trades_mvp.csv")))
 
     from dashboard_mvp import plot_dashboard, plot_orderbook
-    plot_dashboard(sim, save_path="dashboard_mvp.png")
-    plot_orderbook(sim, save_path="orderbook_mvp.png")
-    print("wrote: dashboard_mvp.png, orderbook_mvp.png")
+    plot_dashboard(sim, save_path=os.path.join(HERE, "dashboard_mvp.png"), show=SHOW)
+    plot_orderbook(sim, save_path=os.path.join(HERE, "orderbook_mvp.png"), show=SHOW)
+    print("wrote:", os.path.join(HERE, "dashboard_mvp.png"),
+          os.path.join(HERE, "orderbook_mvp.png"))

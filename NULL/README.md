@@ -55,7 +55,7 @@ the boxed block inside `Book.submit()`. Everything else only reads it.
 ## Run
 
 ```bash
-python simulation_mvp.py
+python NULL/simulation_mvp.py
 ```
 
 Edit the block at the bottom of the file (n, T, seed, and the three model

@@ -43,8 +43,6 @@ def _bin_mean(x: np.ndarray, y: np.ndarray, n_bins: int = 300):
 
 def plot_dashboard(sim, save_path: str = "dashboard_mvp.png", show: bool = False):
     """The two-panel MVP dashboard: price evolution + final PnL distribution."""
-    import matplotlib
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     t = np.asarray(sim.rec_tick)
@@ -93,8 +91,9 @@ def plot_dashboard(sim, save_path: str = "dashboard_mvp.png", show: bool = False
     fig.tight_layout(rect=(0, 0, 1, 0.94))
     fig.savefig(save_path, dpi=130, bbox_inches="tight")
     if show:
-        plt.show()
-    plt.close(fig)
+        plt.show()          # pops the IDE window; returns when it is closed
+    else:
+        plt.close(fig)
     return save_path
 
 
@@ -108,8 +107,6 @@ def plot_orderbook(sim, save_path: str = "orderbook_mvp.png", show: bool = False
       asks = resting SELL orders — mostly LONGS' take-profit sells, above
              the price, plus flat shorts' resting entry residuals.
     Liquidity here is other agents' unrealized profit, waiting."""
-    import matplotlib
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     t = np.asarray(sim.rec_tick)
@@ -178,6 +175,7 @@ def plot_orderbook(sim, save_path: str = "orderbook_mvp.png", show: bool = False
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     fig.savefig(save_path, dpi=130, bbox_inches="tight")
     if show:
-        plt.show()
-    plt.close(fig)
+        plt.show()          # pops the IDE window; returns when it is closed
+    else:
+        plt.close(fig)
     return save_path
