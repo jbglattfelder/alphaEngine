@@ -43,11 +43,14 @@ clockwork.
 
 ## Files
 
-| file                | what it is |
-|---------------------|------------|
-| `simulation_mvp.py` | the entire engine, one file: config, orders, book, agents, tick loop |
-| `dashboard_mvp.py`  | plots: price + PnL distribution; order-book depth, volume, deepest state |
-| `verify_mvp.py`     | proves bit-equality against the reference engine, tick by tick |
+| file                   | what it is |
+|------------------------|------------|
+| `simulation_mvp.py`    | the entire engine, one file: config, orders, book, agents, tick loop |
+| `dashboard_mvp.py`     | plots: price + PnL distribution; order-book depth, volume, deepest state |
+| `scaling_law_mvp.py`   | intrinsic-time scaling laws (DC count / overshoot) from the price feed |
+| `stylized_facts_mvp.py`| the Cont (2001) stylized-facts scorecard from the price feed |
+| `dc_analysis.py`       | the directional-change / overshoot algorithms (feed-only, engine-blind) |
+| `verify/verify_mvp.py` | proves bit-equality against the reference engine, tick by tick |
 
 The emergent price has exactly **one write site** in the whole codebase —
 the boxed block inside `Book.submit()`. Everything else only reads it.
@@ -61,13 +64,20 @@ python NULL/simulation_mvp.py
 Edit the block at the bottom of the file (n, T, seed, and the three model
 switches). A default run (n=150, T=100k) takes ~1.5 minutes and writes:
 
-- `dashboard_mvp.png` — the emergent price and the final per-agent PnL
+- `dashboard_<tag>.png` — the emergent price and the final per-agent PnL
   distribution (with the zero-sum Σ in the title)
-- `orderbook_mvp.png` — resting orders and volume per side over time, and
+- `orderbook_<tag>.png` — resting orders and volume per side over time, and
   the run's deepest book state as a cumulative depth chart
-- `price_btc_eur.csv` — `tick, BTC/EUR` (full precision)
-- `trades_mvp.csv` — every print: `tick, trade_id, agent_id, buy_sell,
-  size, price` (attributed to the taker)
+- `price_btc_eur_<tag>.csv` — `tick, BTC/EUR` (full precision)
+- `trades_<tag>.csv` — every print: `tick, trade_id, agent_id, buy_sell,
+  size, price` (agent ids are `L0..L{n-1}` / `S0..S{n-1}`; attribution is
+  the taker)
+
+`<tag>` is the minimal config designator, e.g. `mvp_n150_s9_x0-1.0`
+(n, seed, x_0; a non-default block switch appends itself, so variant runs
+never overwrite the null's files). `scaling_law_mvp.py` and
+`stylized_facts_mvp.py` reuse the tagged price CSV when present and add
+`scaling_laws_<tag>.png` / `stylized_facts_<tag>.png`.
 
 ## The three switches
 

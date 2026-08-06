@@ -411,7 +411,13 @@ class Agent:
         pos_b = net BTC acquired by trading
         pos_q = net EUR received by trading (signed)
     so avg entry = -pos_q/pos_b and PnL at price p = p*pos_b + pos_q."""
-    id: int
+    id: str               # "L0".."L{n-1}" longs, "S0".."S{n-1}" shorts. Safe as a
+                          # string: ids never enter arithmetic, ordering (priority
+                          # is by oref, iteration by array position) or, on the
+                          # default path, any RNG stream — they only tag orders,
+                          # trades and wallets. The one place needing a NUMBER
+                          # (the closing="normal" hold-time stream) derives it
+                          # from the label; see _step_closes_and_entries.
     is_long: bool         # long: EUR-heavy, buys BTC. short: BTC-heavy, sells BTC.
     eur: float            # EUR wallet
     btc: float            # BTC wallet
@@ -620,21 +626,18 @@ def build_agents(cfg: Config) -> list[Agent]:
     scale = float(d_raw.mean())                    # fix mean(d) = 1 exactly-ish
 
     agents: list[Agent] = []
-    agent_id = 0
-    for k0 in k0_long:                             # LONGS first: EUR-heavy wallets
+    for i, k0 in enumerate(k0_long):               # LONGS first: EUR-heavy wallets
         eur = k0 * cfg.f
         btc = k0 * (1.0 - cfg.f) / cfg.x_0
         d = (float(k0) / mu) / scale
-        agents.append(Agent(id=agent_id, is_long=True, eur=eur, btc=btc,
+        agents.append(Agent(id=f"L{i}", is_long=True, eur=eur, btc=btc,
                             K0=float(k0), d=d, tp_band=cfg.tp, sl_band=cfg.sl))
-        agent_id += 1
-    for k0 in k0_short:                            # SHORTS: BTC-heavy wallets
+    for i, k0 in enumerate(k0_short):              # SHORTS: BTC-heavy wallets
         btc = k0 * cfg.f / cfg.x_0
         eur = k0 * (1.0 - cfg.f)
         d = (float(k0) / mu) / scale
-        agents.append(Agent(id=agent_id, is_long=False, eur=eur, btc=btc,
+        agents.append(Agent(id=f"S{i}", is_long=False, eur=eur, btc=btc,
                             K0=float(k0), d=d, tp_band=cfg.tp, sl_band=cfg.sl))
-        agent_id += 1
 
     # DICE 2 — who wakes up first. phi_0 ~ U(0, d): agents start uniformly
     # in phase (steady state), on a DEDICATED stream so toggling jitter or
@@ -654,6 +657,21 @@ def build_agents(cfg: Config) -> list[Agent]:
             a.tp_band = max(tp_draw, cfg.band_floor * cfg.tp)
             a.sl_band = max(sl_draw, cfg.band_floor * cfg.sl)
     return agents
+
+
+def cfg_tag(cfg: Config) -> str:
+    """The minimal config designator appended to every output filename,
+    e.g. "mvp_n150_s9_x0-1.0". Always names (n, seed, x_0); a non-default
+    block switch appends itself, so variant runs never overwrite the null's
+    files."""
+    tag = f"mvp_n{cfg.n}_s{cfg.seed}_x0-{cfg.x_0}"
+    if cfg.capital_dist != "pareto":
+        tag += f"_cap-{cfg.capital_dist}"
+    if cfg.band_dist != "fixed":
+        tag += f"_band-{cfg.band_dist}"
+    if cfg.closing != "clock":
+        tag += f"_close-{cfg.closing}"
+    return tag
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1013,8 +1031,13 @@ class Simulation:
             a.opened_ever = True
             if cfg.closing == "normal" and a.pos_b == 0:
                 # block 2c "normal": draw this round trip's holding time on a
-                # dedicated per-tick stream (default "clock" never draws)
-                hold_rng = np.random.default_rng([cfg.seed or 0, 0xC10C, t, a.id])
+                # dedicated per-agent-per-tick stream (default "clock" never
+                # draws). SeedSequence needs INTEGERS, so the string id is
+                # decomposed into (side, number): "L12" -> (0, 12), "S3" -> (1, 3)
+                side_code = 0 if a.is_long else 1
+                number = int(a.id[1:])
+                hold_rng = np.random.default_rng(
+                    [cfg.seed or 0, 0xC10C, t, side_code, number])
                 mean_hold = a.d / cfg.c
                 draw = mean_hold * (1.0 + cfg.close_cv * float(hold_rng.standard_normal()))
                 a.close_deadline = max(1, int(round(draw)))
@@ -1202,22 +1225,28 @@ class Simulation:
         return "\n".join(lines)
 
     # ── CSV outputs ──────────────────────────────────────────────────────────
-    def write_price_csv(self, path: str = "price_btc_eur.csv") -> str:
+    def write_price_csv(self, path: Optional[str] = None) -> str:
         """The emergent price series. Column named after the pair BTC/EUR
         (base BTC, quote EUR — the value is EUR per BTC, same number the
         engine trades at)."""
+        if path is None:
+            path = f"price_btc_eur_{cfg_tag(self.cfg)}.csv"
         with open(path, "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["tick", "BTC/EUR"])
             for t, p in zip(self.rec_tick, self.rec_price):
-                w.writerow([t, repr(p)])
+                w.writerow([t, repr(float(p))])   # repr(float()) = full precision,
+                                                  # plain text (np.float64's repr
+                                                  # would write "np.float64(...)")
         return path
 
-    def write_trades_csv(self, path: str = "trades_mvp.csv") -> str:
+    def write_trades_csv(self, path: Optional[str] = None) -> str:
         """The market trades, one row per print. agent_id and buy/sell name
         the TAKER (the marketable order that walked the book); size is BTC.
         `price` is appended beyond the requested columns — delete the last
         column if unwanted."""
+        if path is None:
+            path = f"trades_{cfg_tag(self.cfg)}.csv"
         with open(path, "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["tick", "trade_id", "agent_id", "buy_sell", "size", "price"])
@@ -1253,12 +1282,14 @@ if __name__ == "__main__":
     print(cfg.summary())
     sim = Simulation(cfg).run()
     print(sim.summary())
+    tag = cfg_tag(cfg)
     print("wrote:",
-          sim.write_price_csv(os.path.join(HERE, "price_btc_eur.csv")),
-          sim.write_trades_csv(os.path.join(HERE, "trades_mvp.csv")))
+          sim.write_price_csv(os.path.join(HERE, f"price_btc_eur_{tag}.csv")),
+          sim.write_trades_csv(os.path.join(HERE, f"trades_{tag}.csv")))
 
     from dashboard_mvp import plot_dashboard, plot_orderbook
-    plot_dashboard(sim, save_path=os.path.join(HERE, "dashboard_mvp.png"), show=SHOW)
-    plot_orderbook(sim, save_path=os.path.join(HERE, "orderbook_mvp.png"), show=SHOW)
-    print("wrote:", os.path.join(HERE, "dashboard_mvp.png"),
-          os.path.join(HERE, "orderbook_mvp.png"))
+    dash_png = os.path.join(HERE, f"dashboard_{tag}.png")
+    book_png = os.path.join(HERE, f"orderbook_{tag}.png")
+    plot_dashboard(sim, save_path=dash_png, show=SHOW)
+    plot_orderbook(sim, save_path=book_png, show=SHOW)
+    print("wrote:", dash_png, book_png)

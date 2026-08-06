@@ -27,13 +27,15 @@ import time
 
 import numpy as np
 
-# this file lives in NULL/; the reference (legacy) engine lives one level up,
-# in the repo root. Put the root on the path so its modules import, and
-# anchor our output PNGs next to this file instead of the CWD.
+# this file lives in NULL/verify/; simulation_mvp lives one level up in
+# NULL/, and the reference (legacy) engine two levels up in the repo root.
+# Put both on the path, and anchor output PNGs next to this file.
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-if ROOT not in sys.path:
-    sys.path.insert(1, ROOT)          # [0] stays HERE (simulation_mvp import)
+NULLDIR = os.path.dirname(HERE)
+ROOT = os.path.dirname(NULLDIR)
+for p in (NULLDIR, ROOT):
+    if p not in sys.path:
+        sys.path.append(p)
 
 from config import Config as LegacyConfig
 from simulation import Simulation as LegacySimulation
@@ -134,8 +136,10 @@ if __name__ == "__main__":
     T = 100_000
     SEED = 9
     verdicts = []
-    for label, n, png in (("default n=150", 150, os.path.join(HERE, "verify_default.png")),
-                          ("default n=2", 2, os.path.join(HERE, "verify_n2.png"))):
+    from simulation_mvp import cfg_tag
+    for label, n in (("default n=150", 150), ("default n=2", 2)):
+        tag = cfg_tag(mvp.Config(n=n, T=T, seed=SEED))
+        png = os.path.join(HERE, f"verify_{tag}.png")
         legacy, dt_l = run_legacy(n, T, SEED)
         new, dt_m = run_mvp(n, T, SEED)
         print(f"\n=== {label} ===  legacy {dt_l:.1f}s | mvp {dt_m:.1f}s")
