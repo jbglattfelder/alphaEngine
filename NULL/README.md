@@ -73,11 +73,16 @@ switches). A default run (n=150, T=100k) takes ~1.5 minutes and writes:
   size, price` (agent ids are `L0..L{n-1}` / `S0..S{n-1}`; attribution is
   the taker)
 
+- `scaling_laws_<tag>.png` — the intrinsic-time laws (DC count / mean
+  overshoot, log-log, with fits and the BM references)
+- `stylized_facts_<tag>.png` — the Cont scorecard (ACF of r and |r|,
+  kurtosis under aggregation), with the printed report in the console
+
 `<tag>` is the minimal config designator, e.g. `mvp_n150_s9_x0-1.0`
 (n, seed, x_0; a non-default block switch appends itself, so variant runs
-never overwrite the null's files). `scaling_law_mvp.py` and
-`stylized_facts_mvp.py` reuse the tagged price CSV when present and add
-`scaling_laws_<tag>.png` / `stylized_facts_<tag>.png`.
+never overwrite the null's files). All four figures come from one run;
+`scaling_law_mvp.py` and `stylized_facts_mvp.py` can also run standalone,
+reusing the tagged price CSV when present (instant, no simulation).
 
 ## The three switches
 

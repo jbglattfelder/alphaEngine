@@ -1,21 +1,23 @@
 """
-stylized_facts_mvp.py — the Cont (2001) stylized-facts scorecard for one
+stylized_facts_mvp.py — the Cont (2001) stylized-facts scorecard for an
 MVP run.
 
-Edit the block below and press Run. It reuses the tagged price-feed CSV if
-present (else runs the MVP engine and writes it), then tests the feed
-against the classic facts:
+Called from simulation_mvp.py's run block exactly like the dashboard:
 
+    from stylized_facts_mvp import plot_stylized_facts
+    plot_stylized_facts(sim, save_path=..., show=SHOW)
+
+Facts tested on the run's emergent price:
   SF1 absence of linear autocorrelation : ACF(r) ~ 0 beyond lag ~1
   SF2 volatility clustering             : ACF(|r|) > 0, slow decay
   SF3 heavy tails                       : excess kurtosis >> 0 at tick scale
   SF4 aggregational gaussianity         : kurtosis falls under aggregation
   SF5 activity                          : fraction of zero-return ticks
 
-Prints the scorecard and writes a three-panel figure, both named with the
-config designator:
-    price_btc_eur_<tag>.csv   (the feed, shared with simulation_mvp.py)
-    stylized_facts_<tag>.png
+Prints the scorecard and writes a three-panel figure.
+
+Standalone use: running this file analyses the default config's tagged
+price CSV if it exists (instant), else runs the default config first.
 """
 
 from __future__ import annotations
@@ -23,29 +25,6 @@ from __future__ import annotations
 import os
 
 import numpy as np
-
-from simulation_mvp import Config, Simulation, cfg_tag
-from dc_analysis import load_csv
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-
-# ---------------- edit these ----------------
-N = 150          # agents per side
-T = 100_000      # ticks
-SEED = 9
-CAPITAL_DIST = "pareto"   # block 2a: "pareto" | "normal"
-BAND_DIST = "fixed"       # block 2b: "fixed"  | "normal"
-CLOSING = "clock"         # block 2c: "clock"  | "normal"
-
-REUSE_CSV = True    # True: skip the run if the tagged feed CSV already exists
-SHOW = True         # pop the figure in the IDE (it saves either way)
-# --------------------------------------------
-
-CFG = Config(n=N, T=T, seed=SEED, capital_dist=CAPITAL_DIST,
-             band_dist=BAND_DIST, closing=CLOSING)
-TAG = cfg_tag(CFG)
-CSV_PATH = os.path.join(HERE, f"price_btc_eur_{TAG}.csv")
-OUT = os.path.join(HERE, f"stylized_facts_{TAG}.png")
 
 LAGS_R = [1, 2, 3, 5, 10, 20]              # linear-ACF probe lags   (SF1)
 LAGS_ABS = [1, 5, 10, 25, 50, 100, 250]    # |r|-ACF probe lags      (SF2)
@@ -73,10 +52,12 @@ def excess_kurtosis(x: np.ndarray) -> float:
     return float(((x - x.mean()) ** 4).mean() / s ** 4 - 3.0)
 
 
-def facts(prices: np.ndarray) -> dict:
+def compute_facts(prices: np.ndarray) -> dict:
     """All five stylized-fact measurements for one price series."""
+    prices = np.asarray(prices, float)
+    prices = prices[np.isfinite(prices) & (prices > 0)]
     r = np.diff(np.log(prices))
-    out = {}
+    out = {"n_ticks": len(prices)}
     out["zero_frac"] = float((r == 0).mean())          # SF5
     out["sd"] = float(r.std())
     out["acf_r"] = acf(r, LAGS_R)                      # SF1
@@ -89,30 +70,39 @@ def facts(prices: np.ndarray) -> dict:
     return out
 
 
-def report(F: dict) -> None:
+def report_facts(F: dict, tag: str) -> None:
     """Print the scorecard with the reference behaviour next to each fact."""
     ar, aa, k = F["acf_r"], F["acf_abs"], F["kurt"]
-    print(f"\n=== stylized facts — {TAG} ===")
-    print(f"  tick sd(r)          : {F['sd']:.4g}")
-    print(f"  SF5 zero-return %   : {100 * F['zero_frac']:.1f}%   "
+    print(f"\n=== stylized facts — {tag} ===")
+    print(f"  tick sd(r)           : {F['sd']:.4g}")
+    print(f"  SF5 zero-return %    : {100 * F['zero_frac']:.1f}%   "
           f"(ticks where no trade moved the price)")
-    print(f"  SF1 ACF(r)          : L1={ar[0]:+.3f}  L5={ar[3]:+.3f}  "
+    print(f"  SF1 ACF(r)           : L1={ar[0]:+.3f}  L5={ar[3]:+.3f}  "
           f"L20={ar[5]:+.3f}   [fact: ~0 beyond lag ~1]")
-    print(f"  SF2 ACF(|r|)        : L1={aa[0]:+.3f}  L10={aa[2]:+.3f}  "
+    print(f"  SF2 ACF(|r|)         : L1={aa[0]:+.3f}  L10={aa[2]:+.3f}  "
           f"L100={aa[5]:+.3f}  L250={aa[6]:+.3f}   [fact: >0, slow decay]")
-    print(f"  SF3 kurtosis (m=1)  : {k[1]:.1f}   [fact: >> 0 (Gaussian = 0)]")
-    print(f"  SF4 kurtosis m=1->125: {k[1]:.1f} -> {k[5]:.1f} -> {k[25]:.1f} "
-          f"-> {k[125]:.1f}   [fact: falls under aggregation]")
+    print(f"  SF3 kurtosis (m=1)   : {k[1]:.1f}   [fact: >> 0 (Gaussian = 0)]")
+    print(f"  SF4 kurtosis m=1->125: {k[1]:.1f} -> {k[5]:.1f} -> "
+          f"{k[25]:.1f} -> {k[125]:.1f}   [fact: falls under aggregation]")
 
 
-def plot(prices: np.ndarray, F: dict) -> None:
-    """Three panels: ACF(r), ACF(|r|), kurtosis vs aggregation scale."""
+def plot_stylized_facts(sim, save_path: str = None, show: bool = False) -> str:
+    """The run-block entry point (mirrors plot_dashboard's shape): measure
+    the five facts on the finished simulation's price series, print the
+    scorecard, save the three-panel figure, and pop it when show=True."""
     import matplotlib.pyplot as plt
+    from simulation_mvp import cfg_tag
+
+    tag = cfg_tag(sim.cfg)
+    if save_path is None:
+        save_path = f"stylized_facts_{tag}.png"
+    F = compute_facts(np.asarray(sim.rec_price))
+    report_facts(F, tag)
 
     BLUE, ORANGE, GREY = "#2563EB", "#C2680A", "#9CA3AF"
     fig, (a1, a2, a3) = plt.subplots(1, 3, figsize=(15, 4.4))
-    fig.suptitle(f"Stylized facts (Cont 2001)  |  {TAG}  |  "
-                 f"{len(prices):,} ticks", fontsize=11, fontweight="bold")
+    fig.suptitle(f"Stylized facts (Cont 2001)  |  {tag}  |  "
+                 f"{F['n_ticks']:,} ticks", fontsize=11, fontweight="bold")
 
     # SF1 — linear ACF of returns: dies at lag 1 (no free lunch)
     a1.axhline(0, color=GREY, lw=0.8, ls=":")
@@ -143,33 +133,36 @@ def plot(prices: np.ndarray, F: dict) -> None:
     a3.grid(True, which="both", ls=":", alpha=0.4)
 
     fig.tight_layout(rect=(0, 0, 1, 0.92))
-    fig.savefig(OUT, dpi=140, bbox_inches="tight")
-    print(f"\nwrote {OUT}")
-    if SHOW:
-        plt.show()
+    fig.savefig(save_path, dpi=140, bbox_inches="tight")
+    print(f"wrote {save_path}")
+    if show:
+        plt.show()          # pops the IDE window; returns when it is closed
     else:
         plt.close(fig)
-
-
-def main() -> None:
-    if REUSE_CSV and os.path.exists(CSV_PATH):
-        print(f"reusing existing {CSV_PATH} (set REUSE_CSV=False to re-run)")
-    else:
-        print(CFG.summary())
-        sim = Simulation(CFG).run()
-        print(sim.summary())
-        sim.write_price_csv(CSV_PATH)
-        print(f"wrote {CSV_PATH} ({len(sim.rec_price):,} rows)")
-
-    prices = load_csv(CSV_PATH, "BTC/EUR")
-    if len(prices) != T:
-        print(f"WARNING: feed has {len(prices):,} rows but T={T:,} — a stale CSV "
-              f"under the same tag? Set REUSE_CSV=False to rebuild it.")
-    prices = prices[np.isfinite(prices) & (prices > 0)]
-    F = facts(prices)
-    report(F)
-    plot(prices, F)
+    return save_path
 
 
 if __name__ == "__main__":
-    main()
+    # standalone convenience: analyse the DEFAULT config. Reuses its tagged
+    # price CSV when present (instant), else runs the engine first.
+    from dc_analysis import load_csv
+    from simulation_mvp import Config, Simulation, cfg_tag
+    from scaling_law_mvp import _FeedShim
+
+    HERE = os.path.dirname(os.path.abspath(__file__))
+    cfg = Config()
+    tag = cfg_tag(cfg)
+    csv_path = os.path.join(HERE, f"price_btc_eur_{tag}.csv")
+    out_png = os.path.join(HERE, f"stylized_facts_{tag}.png")
+    if os.path.exists(csv_path):
+        print(f"reusing {csv_path}")
+        prices = load_csv(csv_path, "BTC/EUR")
+        if len(prices) != cfg.T:
+            print(f"WARNING: feed has {len(prices):,} rows but T={cfg.T:,} — "
+                  f"stale CSV under the same tag? Delete it to rebuild.")
+        plot_stylized_facts(_FeedShim(cfg, prices), save_path=out_png, show=True)
+    else:
+        sim = Simulation(cfg).run()
+        print(sim.summary())
+        sim.write_price_csv(csv_path)
+        plot_stylized_facts(sim, save_path=out_png, show=True)

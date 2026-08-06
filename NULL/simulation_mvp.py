@@ -1269,7 +1269,7 @@ if __name__ == "__main__":
     HERE = os.path.dirname(os.path.abspath(__file__))
 
     # ---------------- edit these ----------------
-    N = 150          # agents per side
+    N = 2          # agents per side
     T = 100_000      # ticks
     SEED = 9
     CAPITAL_DIST = "pareto"   # block 2a: "pareto" | "normal"
@@ -1288,8 +1288,14 @@ if __name__ == "__main__":
           sim.write_trades_csv(os.path.join(HERE, f"trades_{tag}.csv")))
 
     from dashboard_mvp import plot_dashboard, plot_orderbook
+    from scaling_law_mvp import plot_scaling_laws
+    from stylized_facts_mvp import plot_stylized_facts
     dash_png = os.path.join(HERE, f"dashboard_{tag}.png")
     book_png = os.path.join(HERE, f"orderbook_{tag}.png")
+    laws_png = os.path.join(HERE, f"scaling_laws_{tag}.png")
+    facts_png = os.path.join(HERE, f"stylized_facts_{tag}.png")
     plot_dashboard(sim, save_path=dash_png, show=SHOW)
     plot_orderbook(sim, save_path=book_png, show=SHOW)
-    print("wrote:", dash_png, book_png)
+    plot_scaling_laws(sim, save_path=laws_png, show=SHOW)
+    plot_stylized_facts(sim, save_path=facts_png, show=SHOW)
+    print("wrote:", dash_png, book_png, laws_png, facts_png)
