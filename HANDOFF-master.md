@@ -618,6 +618,26 @@ advantage from its array position — every book-touching loop is shuffled,
 verified by grep not by declaration, and "the mirror passed" never certifies
 seat conventions.**
 
+### 4.10 The exponent-scatter correction (RETRACTION + the surviving stylized fact)
+
+The "symmetric null ≈ featureless BM" reading (one seed's figure) is
+**RETRACTED**. Measured: single-path DC exponents at the frozen default —
+E_N = −1.974 (seed 1), −1.988 (seed 9, n=150), **−1.665 (seed 41)**; overshoot
+ratios 0.98, 0.98, **1.90** — against a matched-BM single-path band of
+**−1.897 ± 0.037** and **1.02 ± 0.04** (12 paths, T=150k, matched sd and
+clear-fraction). Seed 41 sits ~6σ (E_N) and ~23σ (os) outside: not path noise.
+**The symmetric null is an ensemble of regimes** — BM-like paths and
+excursion-regime paths — and the WIDTH of the single-path exponent
+distribution is the stylized fact that survives full symmetrization
+(consistent with the heavy intrinsic-time durations, §2-era finding).
+Symmetry constrains the ensemble mean, not the path. Registered suspect for
+the regime selector: the Pareto capital draw's per-seed tribe imbalance
+(seed 41's tribe medians: 496 vs 667 — α=1.5 does not self-average at n=500).
+`experiments/exp_exponent_scatter.py` carries the ≥10-seed design with P1–P3
+registered; engine rows are ~15 min/seed at the frozen default — a
+user-machine batch. Artifacts: tally.jsonl (v2 + exact-arm rows),
+seed_asym.jsonl.
+
 ### 4.11 x₀ is a gauge — the leaks, the fix, and the float limit
 
 The first x₀≠1 run of the coin-book era (user, n=2 seed 9 x₀=100, "kinda looks
@@ -642,25 +662,22 @@ long-horizon equivalence is DISTRIBUTIONAL over seeds, never per-path. Runs at
 any x₀ are now equally legitimate draws; the user's x₀=100 dashboard is,
 post-fix, an ordinary n=2 family member (Class-2-sell freeze and all).
 
-### 4.10 The exponent-scatter correction (RETRACTION + the surviving stylized fact)
+**Confirmed on x₀=1 vs 10** (`experiments/exp_x0_gauge.py`, n=2 s9): ln(p/x₀)
+bit-identical (Δ = exactly 0.0, not merely < tol) for a finite prefix, then a
+**single discrete branch** — Δ jumps to exactly one tp band (1.00e−2) at a
+stop-level touch where the 2-ulp gauge disagreement flips one trigger. So the
+fork is not ulp *drift* that accumulates; it is one boundary flip that steps one
+gauge a whole band and not the other, after which the n=2 paths walk to opposite
+fates (one to p→2.11 rising, one to a Class-2 freeze — the user's two dashboards).
+The prefix length is seed/config-dependent (this arm forked at t=335, not the
+3,520 above — reconcile the exact seed/config before quoting a fixed number).
+**The distributional test (b) is coded but UNRUN** — `exp_x0_gauge.py` RUN_B=True
+does x₀=1 vs 10 at n=500 across ≥10 seeds with a KS test on final ln(p/x₀);
+n=500 is required because n=2 has no ensemble to average over (§4.10). Until that
+batch runs, "distributional equivalence" is the correct standard but a
+*prediction*, evidenced only by the exact-zero prefix, not yet by matched
+ensembles.
 
-The "symmetric null ≈ featureless BM" reading (one seed's figure) is
-**RETRACTED**. Measured: single-path DC exponents at the frozen default —
-E_N = −1.974 (seed 1), −1.988 (seed 9, n=150), **−1.665 (seed 41)**; overshoot
-ratios 0.98, 0.98, **1.90** — against a matched-BM single-path band of
-**−1.897 ± 0.037** and **1.02 ± 0.04** (12 paths, T=150k, matched sd and
-clear-fraction). Seed 41 sits ~6σ (E_N) and ~23σ (os) outside: not path noise.
-**The symmetric null is an ensemble of regimes** — BM-like paths and
-excursion-regime paths — and the WIDTH of the single-path exponent
-distribution is the stylized fact that survives full symmetrization
-(consistent with the heavy intrinsic-time durations, §2-era finding).
-Symmetry constrains the ensemble mean, not the path. Registered suspect for
-the regime selector: the Pareto capital draw's per-seed tribe imbalance
-(seed 41's tribe medians: 496 vs 667 — α=1.5 does not self-average at n=500).
-`experiments/exp_exponent_scatter.py` carries the ≥10-seed design with P1–P3
-registered; engine rows are ~15 min/seed at the frozen default — a
-user-machine batch. Artifacts: tally.jsonl (v2 + exact-arm rows),
-seed_asym.jsonl.
 
 ---
 
@@ -1021,7 +1038,7 @@ Run `python3 test_benchmarks.py` after any engine change; expect 10/10. `.json`/
 
 Instruments added this session (all validated, all committed-clean):
 `exp_detrend_tail.py` (drift-vs-fat-tails via local detrend + sign-ACF, §5.4);
-`exp_fat_tails.py` (CCDF + Hill index + aggregation vs a zero-matched BM control — the tail instrument, §5.4); `exp_clustering.py` (ACF of |r| split into magnitude vs activity, shuffle + zero-matched-BM controls, noise band — §5.5); `exp_drift_decomp.py` (signed Δln p by aggressor type — who pushes the price, §4.9;
+`exp_fat_tails.py` (CCDF + Hill index + aggregation vs a zero-matched BM control — the tail instrument, §5.4); `exp_clustering.py` (ACF of |r| split into magnitude vs activity, shuffle + zero-matched-BM controls, noise band — §5.5); `exp_x0_gauge.py` (x₀-gauge: short-horizon bit-equality of ln(p/x₀) + distributional KS over seeds — §4.11); `exp_drift_decomp.py` (signed Δln p by aggressor type — who pushes the price, §4.9;
 diagnostic wrapper, bit-neutral); `os_median` in `dc_analysis.measure` +
 mean/median dual series in `scaling_law.py` (§4.4, drift-robust overshoot read);
 `entry_mode` switch in `config.py`/`simulation.py` (batch default bit-identical;
