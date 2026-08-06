@@ -71,7 +71,8 @@ import numpy as np
 
 @dataclass
 class Config:
-    """All parameters of the null model. The frozen defaults ARE the null."""
+    """All parameters of the null model."""
+    """NOTE: Some of these values are overridden --- see the main() function below for the actual run parameters."""
 
     # ── population & money ───────────────────────────────────────────────────
     n: int = 150              # agents PER SIDE (total population = 2n)
@@ -1263,13 +1264,15 @@ class Simulation:
 
 if __name__ == "__main__":
     import os
+    import time
+    t = time.time()
 
     # all outputs land NEXT TO THIS FILE (the NULL/ dir), never in the CWD:
     # relative paths would scatter pngs/csvs into whatever dir you ran from.
     HERE = os.path.dirname(os.path.abspath(__file__))
 
-    # ---------------- edit these ----------------
-    N = 2          # agents per side
+    # ---------------- edit these to override defaults ----------------
+    N = 150          # agents per side
     T = 100_000      # ticks
     SEED = 9
     CAPITAL_DIST = "pareto"   # block 2a: "pareto" | "normal"
@@ -1286,6 +1289,9 @@ if __name__ == "__main__":
     print("wrote:",
           sim.write_price_csv(os.path.join(HERE, f"price_btc_eur_{tag}.csv")),
           sim.write_trades_csv(os.path.join(HERE, f"trades_{tag}.csv")))
+
+    elapsed = time.time() - t
+    print(f"elapsed time: {elapsed:.2f} s")
 
     from dashboard_mvp import plot_dashboard, plot_orderbook
     from scaling_law_mvp import plot_scaling_laws
