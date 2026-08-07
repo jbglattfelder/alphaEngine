@@ -717,6 +717,10 @@ class Simulation:
         # recorded series (plain lists; a dict would hide the schema)
         self.rec_tick: list[int] = []
         self.rec_price: list[float] = []
+        self.rec_price_hi: list[float] = []   # highest print of the tick
+        self.rec_price_lo: list[float] = []   # lowest  print of the tick
+        #   (hi/lo = the intra-tick wick envelope; rec_price alone is the
+        #    LAST print per tick and censors flash excursions entirely)
         self.rec_crossed: list[bool] = []
         self.rec_matched_btc: list[float] = []
         self.rec_matched_eur: list[float] = []
@@ -1150,8 +1154,22 @@ class Simulation:
             matched_btc += tr.size
             matched_eur += tr.size * tr.price
 
+        if self._trades_this_tick:
+            tick_hi = self._trades_this_tick[0].price
+            tick_lo = tick_hi
+            for tr in self._trades_this_tick:
+                if tr.price > tick_hi:
+                    tick_hi = tr.price
+                if tr.price < tick_lo:
+                    tick_lo = tr.price
+        else:
+            tick_hi = self.p          # quiet tick: envelope collapses to the price
+            tick_lo = self.p
+
         self.rec_tick.append(t)
         self.rec_price.append(self.p)
+        self.rec_price_hi.append(float(tick_hi))
+        self.rec_price_lo.append(float(tick_lo))
         self.rec_crossed.append(bool(self._trades_this_tick))
         self.rec_matched_btc.append(float(matched_btc))
         self.rec_matched_eur.append(float(matched_eur))
@@ -1300,8 +1318,15 @@ if __name__ == "__main__":
     book_png = os.path.join(HERE, f"orderbook_{tag}.png")
     laws_png = os.path.join(HERE, f"scaling_laws_{tag}.png")
     facts_png = os.path.join(HERE, f"stylized_facts_{tag}.png")
+    laws_ev_png = os.path.join(HERE, f"scaling_laws_event_{tag}.png")
+    facts_ev_png = os.path.join(HERE, f"stylized_facts_event_{tag}.png")
     plot_dashboard(sim, save_path=dash_png, show=SHOW)
     plot_orderbook(sim, save_path=book_png, show=SHOW)
     plot_scaling_laws(sim, save_path=laws_png, show=SHOW)
     plot_stylized_facts(sim, save_path=facts_png, show=SHOW)
-    print("wrote:", dash_png, book_png, laws_png, facts_png)
+    # the same two analyses on the EVENT tape (one price per print):
+    # intrinsic time on the model's true clock, intra-tick wicks included
+    plot_scaling_laws(sim, save_path=laws_ev_png, show=SHOW, time_base="event")
+    plot_stylized_facts(sim, save_path=facts_ev_png, show=SHOW, time_base="event")
+    print("wrote:", dash_png, book_png, laws_png, facts_png,
+          laws_ev_png, facts_ev_png)

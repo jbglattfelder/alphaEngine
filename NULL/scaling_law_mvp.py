@@ -132,25 +132,52 @@ def report_scaling(res: dict, tp: float) -> None:
           f"TRENDS: the mean law is drift-inflated)")
 
 
-def plot_scaling_laws(sim, save_path: str = None, show: bool = False) -> str:
+def event_prices(sim) -> np.ndarray:
+    """The event-time tape: one price per PRINT, in execution order — the
+    finest resolution the model has. The tick series is this tape sampled
+    at each tick's last print (intra-tick wicks censored)."""
+    prices = []
+    for row in sim.trades_log:
+        prices.append(row[5])          # (tick, id, agent, side, size, PRICE)
+    return np.asarray(prices, float)
+
+
+def plot_scaling_laws(sim, save_path: str = None, show: bool = False,
+                      time_base: str = "tick") -> str:
     """The run-block entry point (mirrors plot_dashboard's shape): analyse
     the finished simulation's price series, print the report, save the
-    two-law figure, and pop it when show=True."""
+    two-law figure, and pop it when show=True.
+
+    time_base="tick"  : the recorded per-tick series (last print per tick).
+    time_base="event" : the trade tape, one price per print — intrinsic-time
+    analysis on the model's true event clock, intra-tick wicks included."""
     import matplotlib.pyplot as plt
     from simulation_mvp import cfg_tag
 
     cfg = sim.cfg
     tag = cfg_tag(cfg)
-    if save_path is None:
-        save_path = f"scaling_laws_{tag}.png"
-    res = analyse_scaling(np.asarray(sim.rec_price))
+    if time_base == "event":
+        if not getattr(sim, "trades_log", None):
+            raise SystemExit("time_base='event' needs sim.trades_log "
+                             "(a finished Simulation, not a CSV shim)")
+        prices = event_prices(sim)
+        base_txt = f"EVENT time ({len(prices):,} prints)"
+        if save_path is None:
+            save_path = f"scaling_laws_event_{tag}.png"
+    else:
+        prices = np.asarray(sim.rec_price)
+        base_txt = f"tick time ({len(prices):,} ticks)"
+        if save_path is None:
+            save_path = f"scaling_laws_{tag}.png"
+    print(f"\n[scaling laws — {base_txt}]")
+    res = analyse_scaling(prices)
     report_scaling(res, cfg.tp)
 
     D, NDC, OS, OSM = res["D"], res["NDC"], res["OS"], res["OSM"]
     xs = np.array([D.min(), D.max()])
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(12.5, 5.2))
-    fig.suptitle(f"Intrinsic-time scaling laws  |  {tag}  |  T={cfg.T:,}, "
-                 f"tp={cfg.tp} sl={cfg.sl}  |  tick sd(r)={res['sd']:.3g}",
+    fig.suptitle(f"Intrinsic-time scaling laws  |  {tag}  |  {base_txt}  |  "
+                 f"tp={cfg.tp} sl={cfg.sl}  |  sd(r)={res['sd']:.3g}",
                  fontsize=11, fontweight="bold")
 
     # LEFT: number of directional changes — the volatility component

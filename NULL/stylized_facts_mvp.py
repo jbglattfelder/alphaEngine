@@ -86,17 +86,34 @@ def report_facts(F: dict, tag: str) -> None:
           f"{k[25]:.1f} -> {k[125]:.1f}   [fact: falls under aggregation]")
 
 
-def plot_stylized_facts(sim, save_path: str = None, show: bool = False) -> str:
+def plot_stylized_facts(sim, save_path: str = None, show: bool = False,
+                        time_base: str = "tick") -> str:
     """The run-block entry point (mirrors plot_dashboard's shape): measure
     the five facts on the finished simulation's price series, print the
-    scorecard, save the three-panel figure, and pop it when show=True."""
+    scorecard, save the three-panel figure, and pop it when show=True.
+
+    time_base="tick"  : the recorded per-tick series (last print per tick).
+    time_base="event" : the trade tape, one price per print (wicks kept).
+    In event time, lags count PRINTS and SF5's zero-returns are consecutive
+    prints at the same level (several makers at one price)."""
     import matplotlib.pyplot as plt
     from simulation_mvp import cfg_tag
 
     tag = cfg_tag(sim.cfg)
-    if save_path is None:
-        save_path = f"stylized_facts_{tag}.png"
-    F = compute_facts(np.asarray(sim.rec_price))
+    if time_base == "event":
+        if not getattr(sim, "trades_log", None):
+            raise SystemExit("time_base='event' needs sim.trades_log "
+                             "(a finished Simulation, not a CSV shim)")
+        from scaling_law_mvp import event_prices
+        prices = event_prices(sim)
+        tag = tag + " [event time]"
+        if save_path is None:
+            save_path = f"stylized_facts_event_{cfg_tag(sim.cfg)}.png"
+    else:
+        prices = np.asarray(sim.rec_price)
+        if save_path is None:
+            save_path = f"stylized_facts_{tag}.png"
+    F = compute_facts(prices)
     report_facts(F, tag)
 
     BLUE, ORANGE, GREY = "#2563EB", "#C2680A", "#9CA3AF"

@@ -55,6 +55,33 @@ def plot_dashboard(sim, save_path: str = "dashboard_mvp.png", show: bool = False
     fig, (ax_price, ax_pnl) = plt.subplots(1, 2, figsize=(13, 4.6))
 
     # ── panel 1: the emergent price ──────────────────────────────────────────
+    # the intra-tick wick envelope first (behind the line): min/max print per
+    # tick — the flash excursions the last-print-per-tick series cannot show
+    hi = getattr(sim, "rec_price_hi", None)
+    lo = getattr(sim, "rec_price_lo", None)
+    if hi is not None and lo is not None and len(hi) == len(t):
+        hi = np.asarray(hi)
+        lo = np.asarray(lo)
+        if len(t) > 2000:
+            # a one-tick wick is sub-pixel at this resolution; aggregate the
+            # envelope per bin with MAX(hi)/MIN(lo) so flash needles survive
+            # the downsampling instead of vanishing (the candlestick rule)
+            n_bins = 1000
+            edges = np.linspace(t[0], t[-1], n_bins + 1)
+            idx = np.clip(np.digitize(t, edges) - 1, 0, n_bins - 1)
+            hi_b = np.full(n_bins, -np.inf)
+            lo_b = np.full(n_bins, np.inf)
+            np.maximum.at(hi_b, idx, hi)
+            np.minimum.at(lo_b, idx, lo)
+            centers = 0.5 * (edges[:-1] + edges[1:])
+            keep = np.isfinite(hi_b)
+            ax_price.fill_between(centers[keep], lo_b[keep], hi_b[keep],
+                                  color="#DC2626", alpha=0.30, linewidth=0,
+                                  label="intra-tick print range (bin high/low)")
+        else:
+            ax_price.fill_between(t, lo, hi, color="#DC2626", alpha=0.30,
+                                  linewidth=0,
+                                  label="intra-tick print range (high/low)")
     ax_price.plot(t, price, color=BLUE, lw=0.7)
     if crossed.any():
         ax_price.scatter(t[crossed], price[crossed], s=3, color=GREEN,

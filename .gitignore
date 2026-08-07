@@ -10,3 +10,4 @@ tmp/
 *.patch
 *.npz
 *.sh
+*.xls

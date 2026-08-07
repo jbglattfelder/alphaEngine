@@ -175,9 +175,13 @@ def plot_stats(rows: list[dict], save_path: str, show: bool = False) -> str:
 
 def print_table(rows: list[dict]) -> None:
     """Across-seed means per arm, one line per arm."""
-    print(f"\n{'arm':>4} {'|drift|':>8} {'sd_rob':>8} {'zero%':>6} "
-          f"{'kurt_m1':>9} {'ACF|r|L1':>9} {'E_N':>7} {'⟨ω⟩/δ':>7} "
-          f"{'alive%':>7} {'trades':>9}")
+    has_phase = "t_lock" in rows[0]
+    hdr = (f"\n{'arm':>4} {'|drift|':>8} {'sd_rob':>8} {'zero%':>6} "
+           f"{'kurt_m1':>9} {'ACF|r|L1':>9} {'E_N':>7} {'⟨ω⟩/δ':>7} "
+           f"{'alive%':>7} {'trades':>9}")
+    if has_phase:
+        hdr += f" {'t_lock':>9} {'tooth_T':>8} {'tooth_sz':>8}"
+    print(hdr)
     for arm in ARM_ORDER:
         sub = [r for r in rows if r["arm"] == arm]
         if not sub:
@@ -193,11 +197,15 @@ def print_table(rows: list[dict]) -> None:
                     vals.append(v)
             return np.mean(vals) if vals else float("nan")
 
-        print(f"{arm:>4} {mean_of('ln_drift', abs):>8.3f} "
-              f"{mean_of('sd_rob'):>8.4f} {100*mean_of('zero_frac'):>5.1f}% "
-              f"{mean_of('kurt_m1'):>9.1f} {mean_of('acf_abs_L1'):>9.3f} "
-              f"{mean_of('E_N'):>7.2f} {mean_of('os_ratio'):>7.2f} "
-              f"{100*mean_of('alive_frac'):>6.1f}% {mean_of('n_trades'):>9.0f}")
+        line = (f"{arm:>4} {mean_of('ln_drift', abs):>8.3f} "
+                f"{mean_of('sd_rob'):>8.4f} {100*mean_of('zero_frac'):>5.1f}% "
+                f"{mean_of('kurt_m1'):>9.1f} {mean_of('acf_abs_L1'):>9.3f} "
+                f"{mean_of('E_N'):>7.2f} {mean_of('os_ratio'):>7.2f} "
+                f"{100*mean_of('alive_frac'):>6.1f}% {mean_of('n_trades'):>9.0f}")
+        if has_phase:
+            line += (f" {mean_of('t_lock'):>9.0f} {mean_of('tooth_period'):>8.0f} "
+                     f"{mean_of('tooth_size'):>8.2f}")
+        print(line)
 
 
 if __name__ == "__main__":
