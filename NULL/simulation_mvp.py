@@ -78,7 +78,7 @@ class Config:
     # ── population & money ───────────────────────────────────────────────────
     n: int = 150              # agents PER SIDE (total population = 2n)
     K: float = 1_000_000.0    # total initial capital, EUR terms (K/2 per side)
-    x_0: float = 1.0          # initial price (EUR per BTC); p(0) = x_0
+    x_0: float = 100.0          # initial price (EUR per BTC); p(0) = x_0
     f: float = 0.5            # home-currency fraction of each wallet at init
 
     # ── block 2a: the capital draw ───────────────────────────────────────────
@@ -1309,12 +1309,12 @@ if __name__ == "__main__":
     HERE = os.path.dirname(os.path.abspath(__file__))
 
     # ---------------- edit these to override defaults ----------------
-    N = 2          # agents per side
+    N = 150          # agents per side
     T = 100_000      # ticks
     SEED = 9
-    CAPITAL_DIST = "pareto"   # block 2a: "pareto" | "normal"
+    CAPITAL_DIST = "normal"   # block 2a: "pareto" | "normal"
     BAND_DIST = "fixed"       # block 2b: "fixed"  | "normal"
-    CLOSING = "clock"         # block 2c: "clock"  | "normal"
+    CLOSING = "normal"         # block 2c: "clock"  | "normal"
     SHOW = True               # pop the figures in the IDE (they save either way)
     # --------------------------------------------
     cfg = Config(n=N, T=T, seed=SEED, capital_dist=CAPITAL_DIST,
