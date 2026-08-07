@@ -5,6 +5,7 @@ __pycache__/
 arch/
 runs/
 eval/
+old/
 tmp/
 *.csv
 *.patch

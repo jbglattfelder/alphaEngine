@@ -95,6 +95,7 @@ flipping one switch changes nothing else.
 | `capital_dist` | `"pareto"` — heavy-tailed   | `"normal"` — homogeneous population |
 | `band_dist`    | `"fixed"` — one tp/sl for all | `"normal"` — per-agent bands |
 | `closing`      | `"clock"` — pressure timer  | `"normal"` — drawn holding times |
+| `size_dist`    | `"fixed"` — everyone deploys wealth/q | `"normal"` — per-agent fraction q_i |
 
 ## Reproducibility
 

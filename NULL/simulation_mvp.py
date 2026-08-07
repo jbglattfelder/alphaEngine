@@ -40,6 +40,7 @@ INTERCHANGEABLE BLOCKS (the experiment switches; defaults = the frozen null)
     capital_dist : "pareto" | "normal"   — who gets how much money (2a)
     band_dist    : "fixed"  | "normal"   — TP/SL bands per agent   (2b)
     closing      : "clock"  | "normal"   — timer-exit trigger      (2c)
+    size_dist    : "fixed"  | "normal"   — order fraction q_i      (2d)
 Each non-default arm draws on its OWN RNG stream, so switching one block
 cannot perturb the others (an A/B stays an A/B).
 
@@ -102,6 +103,16 @@ class Config:
     closing: str = "clock"    # "clock" (pressure >= d) | "normal" (drawn holding time)
     close_cv: float = 0.3     # holding time ~ N(d/c, cv*d/c), truncated >= 1 tick
 
+    # ── block 2d: the order size (decouples bite size from the capital draw) ─
+    # The default couples everything to capital: size ~ wealth/q AND clock
+    # d ~ K0, which secretly makes every agent's VOLUME THROUGHPUT equal
+    # (size x rate = (K0/q)(c/K0) = c/q for all). size_dist="normal" gives
+    # each agent its own fraction q_i ~ N(q, size_cv*q), floored at 1.0
+    # (never more than full wealth per order) — breaking the hidden flux
+    # homogeneity on purpose, on a dedicated stream.
+    size_dist: str = "fixed"  # "fixed" (everyone wealth/q) | "normal" (per-agent q_i)
+    size_cv: float = 0.1      # q_i ~ N(q, size_cv*q), truncated >= 1.0
+
     # ── run control ──────────────────────────────────────────────────────────
     T: int = 100_000          # ticks
     seed: int = 9             # global seed; every stream derives from it
@@ -122,6 +133,7 @@ class Config:
         assert 0.0 < self.f <= 1.0 and self.alpha > 1.0
         assert self.capital_dist in ("pareto", "normal")
         assert self.step6_order in ("shuffled", "array")
+        assert self.size_dist in ("fixed", "normal")
         assert self.band_dist in ("fixed", "normal")
         assert self.closing in ("clock", "normal")
         assert self.c > 0 and self.q >= 1 and self.tp > 0 and self.sl > 0
@@ -135,7 +147,8 @@ class Config:
                      f" (alpha={self.alpha})")
         lines.append(f"  price      : x_0={self.x_0}  (pair BTC/EUR: EUR per BTC)")
         lines.append(f"  clock      : c={self.c}  -> smallest agent fires every"
-                     f" {1.0 / self.c:,.0f} ticks; order = wealth/{self.q}")
+                     f" {1.0 / self.c:,.0f} ticks; order = wealth/{self.q}"
+                     f" (size_dist={self.size_dist})")
         lines.append(f"  bands      : tp={self.tp} sl={self.sl}, dist={self.band_dist}"
                      f" (log-symmetric)")
         lines.append(f"  timer exit : {self.closing}")
@@ -432,6 +445,9 @@ class Agent:
     d: float              # pressure threshold: fires every d/c ticks
     tp_band: float        # this agent's take-profit band (log distance)
     sl_band: float        # this agent's stop-loss band  (log distance)
+    q_i: float = 8.0      # this agent's order fraction: each open deploys
+                          # wealth/q_i (block 2d; cfg.q for everyone on the
+                          # "fixed" default arm)
 
     phi: float = 0.0      # accumulated pressure — the internal clock
     alive: bool = True
@@ -653,6 +669,10 @@ def build_agents(cfg: Config) -> list[Agent]:
     for a in agents:
         a.phi = float(jitter_rng.random()) * a.d
 
+    # everyone starts on the shared fraction; block 2d may override below
+    for a in agents:
+        a.q_i = cfg.q
+
     # block 2b — per-agent exit bands. "fixed" leaves every band at cfg.tp /
     # cfg.sl (the frozen null: one shared price scale, the tp lattice).
     # "normal" draws each agent's bands once, on its own stream.
@@ -663,6 +683,17 @@ def build_agents(cfg: Config) -> list[Agent]:
             sl_draw = cfg.sl * (1.0 + cfg.band_cv * float(band_rng.standard_normal()))
             a.tp_band = max(tp_draw, cfg.band_floor * cfg.tp)
             a.sl_band = max(sl_draw, cfg.band_floor * cfg.sl)
+
+    # block 2d — per-agent order fraction. "fixed" keeps everyone at cfg.q
+    # (the coupled default: equal volume flux, heterogeneous granularity).
+    # "normal" draws q_i once per agent on its own stream: bite size becomes
+    # an independent dial, decoupled from the capital-driven clock. Floor at
+    # 1.0 = an order can deploy at most the agent's full wealth.
+    if cfg.size_dist == "normal":
+        size_rng = np.random.default_rng([cfg.seed or 0, 0x512E])
+        for a in agents:
+            q_draw = cfg.q * (1.0 + cfg.size_cv * float(size_rng.standard_normal()))
+            a.q_i = max(1.0, q_draw)
     return agents
 
 
@@ -678,6 +709,8 @@ def cfg_tag(cfg: Config) -> str:
         tag += f"_band-{cfg.band_dist}"
     if cfg.closing != "clock":
         tag += f"_close-{cfg.closing}"
+    if cfg.size_dist != "fixed":
+        tag += f"_size-{cfg.size_dist}"
     if cfg.step6_order != "shuffled":
         tag += "_s6array"
     return tag
@@ -1032,7 +1065,7 @@ class Simulation:
                 px = self.book.best_bid
                 if px is None:
                     px = self.book.last_price
-            size = a.open_size_btc(cfg.q, px)
+            size = a.open_size_btc(a.q_i, px)   # q_i == cfg.q on the fixed arm
             if size <= 0 or px <= 0:
                 continue
             if a.is_long:
@@ -1309,16 +1342,17 @@ if __name__ == "__main__":
     HERE = os.path.dirname(os.path.abspath(__file__))
 
     # ---------------- edit these to override defaults ----------------
-    N = 150          # agents per side
+    N = 2          # agents per side
     T = 100_000      # ticks
     SEED = 9
     CAPITAL_DIST = "normal"   # block 2a: "pareto" | "normal"
     BAND_DIST = "fixed"       # block 2b: "fixed"  | "normal"
     CLOSING = "normal"         # block 2c: "clock"  | "normal"
+    SIZE_DIST = "normal"       # block 2d: "fixed"  | "normal"
     SHOW = True               # pop the figures in the IDE (they save either way)
     # --------------------------------------------
     cfg = Config(n=N, T=T, seed=SEED, capital_dist=CAPITAL_DIST,
-                 band_dist=BAND_DIST, closing=CLOSING)
+                 band_dist=BAND_DIST, closing=CLOSING, size_dist=SIZE_DIST)
     print(cfg.summary())
     sim = Simulation(cfg).run()
     print(sim.summary())
