@@ -69,8 +69,10 @@ def run_legacy(n: int, T: int, seed: int):
 
 
 def run_mvp(n: int, T: int, seed: int):
-    """One MVP run at its defaults (which ARE the frozen null)."""
-    cfg = mvp.Config(n=n, T=T, seed=seed)
+    """One MVP run in step6_order="array" mode — the arm that reproduces
+    the legacy frozen commit bit-for-bit (the MVP's own default is the
+    FIXED null: step6_order="shuffled", which legitimately diverges)."""
+    cfg = mvp.Config(n=n, T=T, seed=seed, step6_order="array")
     t0 = time.time()
     sim = mvp.Simulation(cfg, run_checks=True).run()
     dt = time.time() - t0
@@ -132,6 +134,26 @@ def side_by_side(name: str, legacy: dict, new: dict, path: str) -> None:
     plt.close(fig)
 
 
+def divergence_demo(n: int, T: int, seed: int) -> None:
+    """Show that the fixed default is a DIFFERENT trajectory: run the
+    shuffled arm against the array arm and report the first tick where
+    the price paths part ways."""
+    a = mvp.Simulation(mvp.Config(n=n, T=T, seed=seed,
+                                  step6_order="array"), run_checks=False).run()
+    s = mvp.Simulation(mvp.Config(n=n, T=T, seed=seed,
+                                  step6_order="shuffled"), run_checks=False).run()
+    pa = np.asarray(a.rec_price)
+    ps = np.asarray(s.rec_price)
+    diff = np.nonzero(pa != ps)[0]
+    if len(diff):
+        i = int(diff[0])
+        print(f"\n[step-6 fix] shuffled diverges from array at tick {i + 1} "
+              f"(of {T:,}); p_final array={pa[-1]!r} vs shuffled={ps[-1]!r}")
+    else:
+        print(f"\n[step-6 fix] WARNING: no divergence in {T:,} ticks — "
+              f"unexpected for n={n}")
+
+
 if __name__ == "__main__":
     T = 100_000
     SEED = 9
@@ -146,6 +168,7 @@ if __name__ == "__main__":
         ok = compare(label, legacy, new)
         side_by_side(label, legacy, new, png)
         verdicts.append((label, ok))
+    divergence_demo(150, 10_000, SEED)
     print("\n" + "=" * 50)
     for label, ok in verdicts:
         print(f"  {'PASS' if ok else 'FAIL'}  {label}")

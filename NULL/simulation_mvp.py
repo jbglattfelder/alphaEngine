@@ -43,14 +43,15 @@ INTERCHANGEABLE BLOCKS (the experiment switches; defaults = the frozen null)
 Each non-default arm draws on its OWN RNG stream, so switching one block
 cannot perturb the others (an A/B stays an A/B).
 
-KNOWN WELD (inherited deliberately)
------------------------------------
-The frozen commit runs the step-6 close-refire loop in AGENT-ARRAY ORDER:
-the (seed, 0x6E1C, t) shuffle that HANDOFF §4.9 documents as the fix was
-committed into the dead bailout path, not here. We reproduce the array
-order because the benchmarks and dashboards are frozen on it. Fixing it is
-a physics change (new trajectories, benchmark re-freeze) — a separate,
-explicit decision. See _refire_stuck_closes_and_settle().
+THE FOURTH DIE (step6_order)
+----------------------------
+The legacy frozen commit ran the step-6 close-refire loop in agent-array
+order — its documented (seed, 0x6E1C, t) shuffle had been committed into
+the dead bailout path by mistake (a per-tick seat privilege; HANDOFF §4.9
+vs code). This rebuild fixes it BY DEFAULT: step6_order="shuffled" is the
+new null, with its own dedicated stream. step6_order="array" reproduces
+the legacy commit bit-for-bit so the lineage stays provable — that is the
+arm verify_mvp.py checks against the reference engine.
 """
 
 from __future__ import annotations
@@ -104,6 +105,10 @@ class Config:
     # ── run control ──────────────────────────────────────────────────────────
     T: int = 100_000          # ticks
     seed: int = 9             # global seed; every stream derives from it
+    step6_order: str = "shuffled"  # "shuffled" (the fixed null: step-6 re-fires
+                                   # on their own (seed, 0x6E1C, t) stream) |
+                                   # "array" (reproduces the legacy frozen
+                                   # commit bit-for-bit; kept for verification)
     x_min: Optional[float] = None    # Pareto floor; K/(10n) when None
     epsilon: Optional[float] = None  # bankruptcy threshold (EUR); 0.01*x_min when None
 
@@ -116,6 +121,7 @@ class Config:
         assert self.n >= 1 and self.K > 0 and self.x_0 > 0
         assert 0.0 < self.f <= 1.0 and self.alpha > 1.0
         assert self.capital_dist in ("pareto", "normal")
+        assert self.step6_order in ("shuffled", "array")
         assert self.band_dist in ("fixed", "normal")
         assert self.closing in ("clock", "normal")
         assert self.c > 0 and self.q >= 1 and self.tp > 0 and self.sl > 0
@@ -672,6 +678,8 @@ def cfg_tag(cfg: Config) -> str:
         tag += f"_band-{cfg.band_dist}"
     if cfg.closing != "clock":
         tag += f"_close-{cfg.closing}"
+    if cfg.step6_order != "shuffled":
+        tag += "_s6array"
     return tag
 
 
@@ -1089,17 +1097,28 @@ class Simulation:
           - a committed close still undelivered re-fires its market order
           - every delivered promise settles (banks PnL, re-arms the clock)
 
-        KNOWN WELD (reproduced on purpose): this loop runs in AGENT-ARRAY
-        ORDER, and _fire_close prints market orders — a per-tick seat
-        privilege. The frozen commit ships it this way (its 0x6E1C shuffle
-        was committed into the dead bailout path); the benchmarks and the
-        frozen dashboards include it. Fixing it = new trajectories = an
-        explicit re-freeze decision, not a refactor."""
+        ORDERING (the former seat weld, now fixed by default): _fire_close
+        prints market orders, so iteration order here is a seat privilege.
+        The legacy frozen commit ran this loop in agent-array order — its
+        0x6E1C shuffle was committed into the dead bailout path by mistake.
+        step6_order="shuffled" (default) applies that shuffle where it was
+        always meant to go: a fresh permutation per tick on the dedicated
+        (seed, 0x6E1C, t) stream. step6_order="array" reproduces the legacy
+        commit bit-for-bit and exists so verify_mvp.py can keep proving it."""
         live_refs = set()
         for o in self.book.bids + self.book.asks:
             if o.active:
                 live_refs.add(o.oref)
-        for a in self.alive():
+        agents_6 = self.alive()
+        if self.cfg.step6_order == "shuffled" and len(agents_6) > 1:
+            shuffle_rng = np.random.default_rng(
+                np.random.SeedSequence((self.cfg.seed, 0x6E1C, t)))
+            order = shuffle_rng.permutation(len(agents_6))
+            shuffled = []
+            for i in order:
+                shuffled.append(agents_6[i])
+            agents_6 = shuffled
+        for a in agents_6:
             if a.tp_ref is not None and a.tp_ref not in live_refs:
                 a.tp_ref = None                    # TP fully filled: exited happy
             if a.closing and self._close_undelivered(a):
@@ -1290,7 +1309,7 @@ if __name__ == "__main__":
     HERE = os.path.dirname(os.path.abspath(__file__))
 
     # ---------------- edit these to override defaults ----------------
-    N = 150          # agents per side
+    N = 2          # agents per side
     T = 100_000      # ticks
     SEED = 9
     CAPITAL_DIST = "pareto"   # block 2a: "pareto" | "normal"

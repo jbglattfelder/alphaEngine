@@ -58,6 +58,16 @@ def robust_tick_sd(prices: np.ndarray) -> float:
     sd_raw = float(np.std(r_fin))
     if len(r_nz):
         sd = float(1.4826 * np.median(np.abs(r_nz - np.median(r_nz))))
+        med_abs = float(np.median(np.abs(r_nz)))
+        if sd < 0.25 * med_abs:
+            # LATTICE DEGENERACY guard: a tiny-n market bounces between a
+            # few book levels, so the nonzero returns are near-IDENTICAL
+            # floats and their MAD collapses to machine epsilon — a broken
+            # ruler. The typical |move| itself is the honest scale then.
+            print(f"NOTE: MAD scale {sd:.3g} is degenerate (identical "
+                  f"lattice returns); using median |r| = {med_abs:.4g} "
+                  f"as the tick scale instead.")
+            sd = med_abs
     else:
         sd = sd_raw
     if sd == 0.0:
@@ -90,8 +100,23 @@ def analyse_scaling(prices: np.ndarray,
         if m is not None:
             rows.append(m)
     if len(rows) < 3:
-        raise SystemExit(f"only {len(rows)} usable thresholds — feed too "
-                         f"short or delta_hi_mult too high")
+        # count RAW DC events at the grid floor so the error names the true
+        # cause: a near-monotone path (e.g. an n=2 TP-ladder ratchet, or the
+        # locked sawtooth's long ramps) has no reversals at these scales —
+        # that is a property of the feed, not a bug in the grid
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")   # a bare probe (min_events=1) may
+            probe = measure(prices, float(deltas[0]), n_t, 1)  # average nothing
+        n_floor = probe["N"] if probe else 0
+        raise RuntimeError(
+            f"only {len(rows)} usable thresholds (need 3): {n_t:,} ticks, "
+            f"robust sd {sd:.4g}, grid {deltas[0]*100:.2f}%–"
+            f"{deltas[-1]*100:.2f}%, DC events at the grid floor: {n_floor} "
+            f"(each threshold needs >= {min_events}). The path has too few "
+            f"reversals at these scales — near-monotone feeds (tiny n, "
+            f"locked sawtooth ramps) have no intrinsic-time structure here. "
+            f"Lower delta_lo_mult, lengthen T, or skip this analysis.")
 
     D = np.array([r["delta"] for r in rows])
     NDC = np.array([r["N"] for r in rows], float)
@@ -170,7 +195,13 @@ def plot_scaling_laws(sim, save_path: str = None, show: bool = False,
         if save_path is None:
             save_path = f"scaling_laws_{tag}.png"
     print(f"\n[scaling laws — {base_txt}]")
-    res = analyse_scaling(prices)
+    try:
+        res = analyse_scaling(prices)
+    except RuntimeError as err:
+        # a feed without DC structure is a legitimate outcome, not a crash:
+        # report why, skip the figure, let the rest of the run block proceed
+        print(f"[scaling laws — SKIPPED] {err}")
+        return None
     report_scaling(res, cfg.tp)
 
     D, NDC, OS, OSM = res["D"], res["NDC"], res["OS"], res["OSM"]

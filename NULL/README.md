@@ -108,11 +108,12 @@ default configuration (n=150 and n=2, T=100k, seed 9) and asserts that
 nine recorded series — price, trade activity, book depth, survivors, side
 PnL — are equal **to the bit** on every one of the 100,000 ticks.
 
-One inherited asymmetry is kept deliberately and documented in place: the
-step-6 close-refire loop runs in agent-array order (see
-`_step_refire_and_settle`). The reference results are frozen on it;
-changing it changes trajectories and is a modelling decision, not a
-refactor.
+The step-6 close-refire loop runs on its own dedicated per-tick shuffle
+(`step6_order="shuffled"`, the default) — the legacy engine's array-order
+seat asymmetry, whose documented fix had been committed into dead code, is
+repaired here. `step6_order="array"` reproduces the legacy frozen commit
+bit-for-bit; that is the arm `verify_mvp.py` proves against the reference
+engine, so the lineage stays checkable while the default null is clean.
 
 ## What the null shows
 
