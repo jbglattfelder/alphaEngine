@@ -111,3 +111,180 @@ Two measurements would sharpen the picture: seeds ×10 on just PFC vs NNN
 at T = 100k, to pin the manufactured-tail floor with honest statistics;
 and a cv-sweep on `band_dist`, to locate where the lattice → ratchet
 transition sits.
+
+---
+
+## Addendum: what longer runs showed (T = 200k–300k, n = 400–500)
+
+The scan above ran for 30,000 ticks. Longer runs change the story.
+
+**Every arm ends up in the same place.** Run long enough, and every
+version of the model — the null included — stops wandering and gets stuck
+far from the starting price (|ln p/x₀| ≈ 3–6). There it repeats the same
+motion forever: a sudden snap, then a slow climb back, then the next snap.
+A sawtooth. No one goes bankrupt; the market just rings against a wall.
+
+**The wall is the closed economy.** There is only so much money. Once the
+price has drifted far enough, one side's wallets can no longer push it
+further. The sawtooth is the market bouncing off that limit: a cascade of
+stop and timer exits crashes the price (the snap), then resting
+take-profits and fresh entries pull it slowly back to the wall, and it
+snaps again.
+
+**So the model has two phases.** First a wandering phase, where the price
+diffuses and the statistics look market-like. Then a stuck phase, where
+the price is pinned at the wall and the sawtooth takes over. The short
+scan mostly saw phase one; the long runs mostly see phase two.
+
+**The blocks do not choose the destination — they choose the speed.**
+This corrects the reading above. All arms reach the wall; they differ in
+how fast:
+
+- bands-normal gets stuck fastest (within ~10–25k ticks),
+- the null is in the middle,
+- capital-normal wanders longest (~100–150k ticks before pinning).
+
+So "capital is the drift dial" really means "equal capital keeps the
+market in the wandering phase longer".
+
+**Which numbers to trust at long horizons.** Once a run is stuck, drift
+just measures the wall (≈ 3–5 everywhere), the overshoot ratio blows up
+(the slow climbs are one giant overshoot each), and the DC exponent E_N
+mixes the two phases — it looks most BM-like (≈ −2) in exactly the arms
+that spend the most time wandering. Tick kurtosis stops separating the
+arms, because the snaps produce huge tails in every arm. None of these are
+wrong; they are measuring the wall, not the market.
+
+**What still stands.** The fat-tail floor survives: no run in either scan
+comes anywhere near Gaussian, including NNN with every input Gaussian. The
+inherited-vs-manufactured comparison lives in the wandering phase (the
+30k table above). And which wall a run picks — top or bottom — is still
+pure seed luck, in line with mirror symmetry as an ensemble property.
+
+**Practical consequence.** Any later comparison (e.g. the level-1 market
+maker) will give different answers in the two phases. Either gate the
+analysis on the wandering phase, or study the wall on purpose. To make
+that possible, the scan now records for every run: the lock time (when
+the run gets stuck), the tooth period and size (the sawtooth's rhythm and
+depth), and each side's wallet totals over time (to confirm the
+wealth-wall mechanism directly).
+
+---
+
+## Addendum 2: the wall, understood (wall + value-wall figures)
+
+The wall figures (`scan_wall_*.png`, `scan_wall_value_*.png`) tested the
+wall mechanism directly. The result corrected it, then confirmed the
+corrected version.
+
+**The wall is made of value, not coins.** The prediction was that the
+losing side runs out of coins when the price gets stuck. It does not: at
+the lock tick the loser typically still holds 60–100% of its coin. But
+the coins are worthless *for pushing* — a short's BTC at a crashed price
+buys almost no EUR of impact. The price move devalues the loser's own
+ammunition. Measured in pushing power (coin × price, in the coin it
+buys), the loser hits zero exactly at the lock tick, in every arm. Lock
+happens when power, not coin, runs out.
+
+**The sawtooth is the winner's mountain, discharged at clock rate.** Once
+one side is powerless, the other side holds enormous buying power in
+cheap-coin terms — but can only deploy wealth/q per clock fire. Each
+tooth is one slow spend of that mountain: snap, discharge, climb, repeat.
+Testable prediction: the tooth period should follow the winners'
+deployment rate, roughly q/(n·c).
+
+**The stuck market is a pump.** During the sawtooth, coins flow one way —
+from the losing tribe to the winning tribe, cycle after cycle, while the
+aggregate EUR/BTC split barely moves. Two end states exist: with Pareto
+wealth the pump stalls at ~15–20% reserves (whales fire too rarely to be
+drained); with equal wallets *and* individual bands it runs to
+completion — longs end holding essentially all the BTC, shorts all the
+EUR. Full segregation, selected by capital homogeneity × band
+heterogeneity.
+
+**The stop/timer race (from the n=2 debugging).** A stop needs the price
+to cross a full band; the timer fires after ~d/c ticks regardless. Which
+exit dominates is set purely by activity: at n=2 the timer wins ~3:1
+(band crossings take ~1,700 ticks vs the ~250-tick timer); at n=150 the
+stop wins ~1000:1 and the timer is vestigial. The SL:timer ratio is an
+activity thermometer, and the timer is confirmed as the small-n liveness
+device and nothing more.
+
+**Open items downgraded or opened today.** The Pareto+bands down-pinning
+weakened: the 30k re-scan split 2 up / 2 down on the suspect arm (the
+band_seed sweep will settle it, now testing a weakened suspicion). Newly
+opened: the re-scanned legacy null reads tamer (|drift| 1.3 vs 2.2,
+kurtosis ~700 vs ~2,800) than the same setup measured before the step-6
+ordering fix — four-seed noise, or the old array-order bug was adding
+drift and tail mass. A two-run A/B (PFCF vs PFCF with
+`step6_order="array"`, same seeds) decides it.
+
+**The narrative, complete.** Diffusive wandering while both sides hold
+power → lock when one side's *power* (not coin) exhausts → sawtooth as
+the rate-limited discharge of the survivor's mountain, pumping coin
+across the tribes → reserves-floor or full segregation depending on
+capital × bands. Every stage now carries a figure.
+
+
+---
+
+## Addendum 3: five experiments, one retraction, one resolution
+
+**The step-6 ordering bug was real physics (exp1).** Same seeds, with and
+without the old fixed-order close loop: the old order added roughly 50%
+more drift (1.99 vs 1.31) and 3× fatter tails (kurtosis 2094 vs 701),
+seed-paired 4 of 4. The fix was not cosmetic. The legacy frozen dashboards
+carry some of that inflation.
+
+**The exit promise controls the market's direction — and our rule is the
+right one (exp5, with a retraction).** Swapping the short's exit rule from
+"re-spend the EUR you earned" (own_coin) to "buy back exactly the BTC you
+sold" (exact) flipped every single run from crashing down to shooting up
+(8/8 vs 8/8) — and the exact runs then froze solid: losing shorts could
+not afford their own exits, positions jammed, the market died. A third
+end state: seized. RETRACTION: an earlier reading called own_coin's e^tp
+over-buy an asymmetry. Wrong — own_coin is the symmetric design
+(shorting BTC IS buying EUR coins; each tribe over-collects its own coin
+by exactly e^tp). "Exact" is the asymmetric rule: it privileges BTC as
+the thing that must be returned. The experiment injected an asymmetry and
+watched it dominate; it did not remove one. Lesson kept: the fine print
+of how positions close is a first-order force.
+
+**The down-pinning mystery is resolved: it was dice 1 (capital_mirror
+test).** With independent capital draws, Pareto+bands pinned down 23 of
+23 times. Give the shorts the identical capital vector as the longs
+(`capital_mirror=True`, one switch, dynamics untouched) and the pinning
+collapses: 5 of 6 runs never lock at all in the same horizon, drifts go
+mixed-sign. The direction was decided by the structure of the capital
+draw — which tribe got the sharper concentration (the more-concentrated
+side won in 7 of the 9 runs where we can check) — not by any coded
+asymmetry. The full mirror audit of the code (stops, TPs, entries,
+sizing, wallets) found every duality holding. Nothing to fix; the mirror
+switch stays as the symmetrized diagnostic arm.
+
+**Whales and gamblers fatten tails differently (exp3).** Sweeping the
+bite-size spread on equal wallets: the typical tick never changes
+(sd_rob flat at band scale) but kurtosis climbs sevenfold (469 → 3,330
+at cv 0.5). Concentrated wealth reshapes the book's texture; concentrated
+aggression just adds monster prints. Stock for the walls; stock AND bite
+for the tails.
+
+**The tooth clock is unmeasured (exp4, inconclusive).** The one-tick snap
+detector caught teeth in only 3 of 15 runs — real cascades spread over
+several ticks and slip under it. To be redone with a directional-change
+detector on the locked segment. One oddity survived: smaller bites lock
+FASTER (q=4 → 143k, q=16 → 61k), the opposite of naive intuition.
+
+**Cross-machine bit-reproducibility is broken (~1e-13).** The same run on
+Mac and Linux diverges in the 13th decimal: the maths library's exp
+differs by one ulp between platforms and chaos amplifies it. The random
+draws are shielded; the hot path's exp calls are not. Directions and
+statistics agree across machines; exact bits did not. RESOLVED: the
+fix (per-agent band multipliers precomputed in decimal at init — the hot
+path becomes pure IEEE arithmetic) is now the default (`exp_mode=
+"decimal"`), and it costs nothing: on Linux it is bit-identical to the
+old libm arm (glibc's exp is correctly rounded on all drawn arguments),
+so the frozen record is unchanged — and a Mac run of the exp5 control
+config reproduced the Linux trajectory to the last bit. Cross-machine
+reproducibility is restored. The libm arm remains for the legacy lineage
+proof, which verify_mvp.py pins explicitly.

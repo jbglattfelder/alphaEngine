@@ -84,6 +84,13 @@ class Config:
 
     # ── block 2a: the capital draw ───────────────────────────────────────────
     capital_dist: str = "pareto"  # "pareto" (heavy tail) | "normal" (homogeneous)
+    capital_mirror: bool = False  # True: shorts get the IDENTICAL K0 vector as
+                                  # longs (no second draw) — forces exact whale
+                                  # symmetry between the tribes. Diagnostic arm
+                                  # for the down-pinning hunt: if direction
+                                  # unanimity survives mirrored capital, the
+                                  # asymmetry is coded; if it dissolves, dice 1
+                                  # (the capital structure) was the decider.
     alpha: float = 1.5            # Pareto tail exponent (pareto arm)
     capital_cv: float = 0.3       # sd = cv * mean          (normal arm)
     capital_floor: float = 0.05   # truncate below floor*mean (normal arm)
@@ -94,6 +101,12 @@ class Config:
 
     # ── block 2b: the exit bands ─────────────────────────────────────────────
     band_dist: str = "fixed"  # "fixed" (everyone tp/sl) | "normal" (per-agent draw)
+    band_seed: Optional[int] = None  # own seed for the band draw (None = the
+                                     # global seed). Lets an experiment redraw
+                                     # ONLY the bands while capital, jitter and
+                                     # every per-tick stream stay fixed — e.g.
+                                     # testing whether the Pareto+bands down-
+                                     # pinning survives fresh band luck.
     tp: float = 0.01          # take-profit band (log distance from entry)
     sl: float = 0.01          # stop-loss band   (log distance from entry)
     band_cv: float = 0.3      # sd = cv * band            (normal arm)
@@ -116,6 +129,23 @@ class Config:
     # ── run control ──────────────────────────────────────────────────────────
     T: int = 100_000          # ticks
     seed: int = 9             # global seed; every stream derives from it
+    exit_promise: str = "own_coin"  # "own_coin" (each tribe delivers its OWN
+                                    # coin: long delivers BTC, short re-spends
+                                    # entry EUR — the short's TP over-buys by
+                                    # e^tp by construction) | "exact" (the
+                                    # short buys back EXACTLY the BTC it sold
+                                    # — flow-symmetric; the ablation arm for
+                                    # the down-pinning mechanism hunt)
+    exp_mode: str = "decimal"  # "decimal" (DEFAULT: per-agent band
+                               # multipliers precomputed via decimal exp at
+                               # init; the hot path is pure IEEE +,*,/ —
+                               # bit-identical ACROSS machines. Verified
+                               # Mac == Linux to the last bit, and identical
+                               # to the libm arm on glibc, so the frozen
+                               # record is unchanged) | "libm" (runtime
+                               # math.exp — kept for the legacy lineage
+                               # proof; Apple libm differs by 1 ulp on some
+                               # args, which chaos amplifies)
     step6_order: str = "shuffled"  # "shuffled" (the fixed null: step-6 re-fires
                                    # on their own (seed, 0x6E1C, t) stream) |
                                    # "array" (reproduces the legacy frozen
@@ -133,6 +163,8 @@ class Config:
         assert 0.0 < self.f <= 1.0 and self.alpha > 1.0
         assert self.capital_dist in ("pareto", "normal")
         assert self.step6_order in ("shuffled", "array")
+        assert self.exit_promise in ("own_coin", "exact")
+        assert self.exp_mode in ("libm", "decimal")
         assert self.size_dist in ("fixed", "normal")
         assert self.band_dist in ("fixed", "normal")
         assert self.closing in ("clock", "normal")
@@ -445,6 +477,10 @@ class Agent:
     d: float              # pressure threshold: fires every d/c ticks
     tp_band: float        # this agent's take-profit band (log distance)
     sl_band: float        # this agent's stop-loss band  (log distance)
+    e_tp_up: float = None   # exp_mode="decimal": e^{+tp_band}, e^{-tp_band},
+    e_tp_dn: float = None   # e^{+sl_band}, e^{-sl_band}, precomputed once via
+    e_sl_up: float = None   # decimal at build time so the hot path never
+    e_sl_dn: float = None   # calls platform libm exp (cross-machine bits)
     q_i: float = 8.0      # this agent's order fraction: each open deploys
                           # wealth/q_i (block 2d; cfg.q for everyone on the
                           # "fixed" default arm)
@@ -507,6 +543,10 @@ class Agent:
         """The take-profit limit price: one band ABOVE entry for a long
         (sell higher), one band BELOW for a short (buy back lower)."""
         x_entry = self.avg_entry_price()
+        if self.e_tp_up is not None:              # decimal arm: no libm exp
+            if self.is_long:
+                return x_entry * self.e_tp_up
+            return x_entry * self.e_tp_dn
         if self.is_long:
             return x_entry * math.exp(self.tp_band)
         return x_entry * math.exp(-self.tp_band)
@@ -515,6 +555,10 @@ class Agent:
         """The stop trigger price: one band BELOW entry for a long,
         one band ABOVE for a short."""
         x_entry = self.avg_entry_price()
+        if self.e_sl_up is not None:              # decimal arm: no libm exp
+            if self.is_long:
+                return x_entry * self.e_sl_dn
+            return x_entry * self.e_sl_up
         if self.is_long:
             return x_entry * math.exp(-self.sl_band)
         return x_entry * math.exp(self.sl_band)
@@ -639,7 +683,10 @@ def build_agents(cfg: Config) -> list[Agent]:
     by c (the mean is K/(2n) exactly, by the rescaled draw)."""
     rng = np.random.default_rng(cfg.seed)          # the MAIN stream: capital only
     k0_long = draw_capital(cfg, rng, cfg.n)
-    k0_short = draw_capital(cfg, rng, cfg.n)
+    if cfg.capital_mirror:
+        k0_short = k0_long.copy()                  # exact whale symmetry
+    else:
+        k0_short = draw_capital(cfg, rng, cfg.n)
 
     # threshold normalisation (the mean, never the min: a min-statistic
     # would let one unlucky small agent set everyone's pace)
@@ -677,12 +724,30 @@ def build_agents(cfg: Config) -> list[Agent]:
     # cfg.sl (the frozen null: one shared price scale, the tp lattice).
     # "normal" draws each agent's bands once, on its own stream.
     if cfg.band_dist == "normal":
-        band_rng = np.random.default_rng([cfg.seed or 0, 0xBA2D])
+        if cfg.band_seed is not None:
+            band_entropy = cfg.band_seed
+        else:
+            band_entropy = cfg.seed or 0
+        band_rng = np.random.default_rng([band_entropy, 0xBA2D])
         for a in agents:
             tp_draw = cfg.tp * (1.0 + cfg.band_cv * float(band_rng.standard_normal()))
             sl_draw = cfg.sl * (1.0 + cfg.band_cv * float(band_rng.standard_normal()))
             a.tp_band = max(tp_draw, cfg.band_floor * cfg.tp)
             a.sl_band = max(sl_draw, cfg.band_floor * cfg.sl)
+
+    # exp_mode="decimal" — precompute each agent's four band multipliers with
+    # decimal exp (correctly rounded, platform-independent), so no runtime
+    # libm exp remains anywhere in the dynamics. See Config.exp_mode.
+    if cfg.exp_mode == "decimal":
+        from decimal import Decimal, getcontext
+        getcontext().prec = 40
+        def dexp(v: float) -> float:
+            return float(Decimal(repr(v)).exp())
+        for a in agents:
+            a.e_tp_up = dexp(a.tp_band)
+            a.e_tp_dn = dexp(-a.tp_band)
+            a.e_sl_up = dexp(a.sl_band)
+            a.e_sl_dn = dexp(-a.sl_band)
 
     # block 2d — per-agent order fraction. "fixed" keeps everyone at cfg.q
     # (the coupled default: equal volume flux, heterogeneous granularity).
@@ -711,6 +776,14 @@ def cfg_tag(cfg: Config) -> str:
         tag += f"_close-{cfg.closing}"
     if cfg.size_dist != "fixed":
         tag += f"_size-{cfg.size_dist}"
+    if cfg.band_seed is not None:
+        tag += f"_bseed{cfg.band_seed}"
+    if cfg.exit_promise != "own_coin":
+        tag += f"_promise-{cfg.exit_promise}"
+    if cfg.capital_mirror:
+        tag += "_capmirror"
+    if cfg.exp_mode != "decimal":
+        tag += "_libm"
     if cfg.step6_order != "shuffled":
         tag += "_s6array"
     return tag
@@ -843,9 +916,10 @@ class Simulation:
         (done when pos_b is dust); a short re-spends the entry EUR it
         received (done when pos_q is dust). This own-coin promise is the
         exit rule the mirror equivariance was verified on."""
-        if not a.is_long:
+        if not a.is_long and self.cfg.exit_promise == "own_coin":
             return a.pos_q > 1e-9 * self.cfg.x_min       # EUR still to spend
         return abs(a.pos_b) > 1e-9 / self.cfg.x_0        # BTC still to deliver
+        # (exact promise: BOTH tribes settle on the BTC leg — flow-symmetric)
 
     def _settle_if_flat(self, a: Agent) -> None:
         """If the close promise is delivered, the round trip is over: bank
@@ -928,11 +1002,18 @@ class Simulation:
                     a.tp_pos_b = a.pos_b
                     self._submit(o, btc_budget=max(a.btc, 0.0))
                 else:
-                    # short TP: BUY back one band below entry, spending the
-                    # entry EUR (size = pos_q / tp_price; budget = that EUR)
                     tp_px = a.tp_price()
-                    size = a.pos_q / tp_px
-                    budget = max(0.0, min(a.eur, a.pos_q))
+                    if cfg.exit_promise == "own_coin":
+                        # short TP: BUY back one band below entry, spending
+                        # the entry EUR (size = pos_q/tp_price; budget = that
+                        # EUR — the e^tp over-buy is the promise)
+                        size = a.pos_q / tp_px
+                        budget = max(0.0, min(a.eur, a.pos_q))
+                    else:
+                        # exact: BUY back exactly the BTC sold (like a long's
+                        # TP sells exactly the BTC bought) — no over-buy
+                        size = -a.pos_b
+                        budget = max(a.eur, 0.0)
                     o = Order(a.id, is_buy=True, price=tp_px,
                               size=size, tick=t, is_close=True)
                     a.tp_ref = o.oref
@@ -974,9 +1055,13 @@ class Simulation:
                         # long cover: sell the position, capped by held BTC
                         qty = min(a.pos_b, max(a.btc, 0.0))
                         sl_sells.append((a, qty))
-                    else:
+                    elif self.cfg.exit_promise == "own_coin":
                         # short cover: spend the remaining entry EUR at market
                         qty = min(a.pos_q, max(a.eur, 0.0)) / p_prev
+                        sl_buys.append((a, qty))
+                    else:
+                        # exact: cover the BTC owed, capped by affordability
+                        qty = min(-a.pos_b, max(a.eur, 0.0) / p_prev)
                         sl_buys.append((a, qty))
         return sl_buys, sl_sells
 
@@ -1111,13 +1196,21 @@ class Simulation:
             self._settle_if_flat(a)
             return
         if not a.is_long:
-            eur_left = a.pos_q
-            if eur_left > 1e-9 * self.cfg.x_min:
-                size = 4.0 * eur_left / max(self.book.last_price, 1e-300)
-                o = Order(a.id, is_buy=True, price=1e18, size=size, tick=t,
-                          is_close=True)
-                self._submit(o, eur_budget=max(0.0, min(a.eur, eur_left)),
-                             rest_residual=False)
+            if self.cfg.exit_promise == "own_coin":
+                eur_left = a.pos_q
+                if eur_left > 1e-9 * self.cfg.x_min:
+                    size = 4.0 * eur_left / max(self.book.last_price, 1e-300)
+                    o = Order(a.id, is_buy=True, price=1e18, size=size, tick=t,
+                              is_close=True)
+                    self._submit(o, eur_budget=max(0.0, min(a.eur, eur_left)),
+                                 rest_residual=False)
+            else:
+                btc_owed = -a.pos_b
+                if btc_owed > 1e-12 / self.cfg.x_0:
+                    o = Order(a.id, is_buy=True, price=1e18, size=btc_owed,
+                              tick=t, is_close=True)
+                    self._submit(o, eur_budget=max(a.eur, 0.0),
+                                 rest_residual=False)
             return
         if a.pos_b > 1e-12 / self.cfg.x_0:
             o = Order(a.id, is_buy=False, price=1e-15, size=a.pos_b, tick=t,
@@ -1342,7 +1435,7 @@ if __name__ == "__main__":
     HERE = os.path.dirname(os.path.abspath(__file__))
 
     # ---------------- edit these to override defaults ----------------
-    N = 2          # agents per side
+    N = 150          # agents per side
     T = 100_000      # ticks
     SEED = 9
     CAPITAL_DIST = "normal"   # block 2a: "pareto" | "normal"

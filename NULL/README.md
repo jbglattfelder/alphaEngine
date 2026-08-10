@@ -99,7 +99,10 @@ flipping one switch changes nothing else.
 
 ## Reproducibility
 
-Runs are bit-identical across machines and across time. The capital draw
+Runs are bit-identical across machines and across time — cross-machine
+identity holds on the default `exp_mode="decimal"` arm (verified Mac ==
+Linux to the last bit; on glibc it also equals the legacy libm arm, so
+the frozen record is unchanged). The capital draw
 goes through exact PCG64 uniforms and a `decimal` inverse-CDF (libm is not
 correctly rounded; one ulp rewrites a chaotic run), totals use `math.fsum`,
 and every stochastic choice sits on a named, seed-derived stream.

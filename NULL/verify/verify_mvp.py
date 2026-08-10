@@ -78,7 +78,7 @@ def run_mvp(n: int, T: int, seed: int):
     cfg = mvp.Config(n=n, T=T, seed=seed, x_0=1.0, f=0.5, c=0.004,
                      tp=0.01, sl=0.01, capital_dist="pareto",
                      band_dist="fixed", closing="clock", size_dist="fixed",
-                     step6_order="array")
+                     step6_order="array", exp_mode="libm")
     t0 = time.time()
     sim = mvp.Simulation(cfg, run_checks=True).run()
     dt = time.time() - t0
@@ -145,9 +145,11 @@ def divergence_demo(n: int, T: int, seed: int) -> None:
     shuffled arm against the array arm and report the first tick where
     the price paths part ways."""
     a = mvp.Simulation(mvp.Config(n=n, T=T, seed=seed, x_0=1.0,
-                                  step6_order="array"), run_checks=False).run()
+                                  step6_order="array", exp_mode="libm"),
+                       run_checks=False).run()
     s = mvp.Simulation(mvp.Config(n=n, T=T, seed=seed, x_0=1.0,
-                                  step6_order="shuffled"), run_checks=False).run()
+                                  step6_order="shuffled", exp_mode="libm"),
+                       run_checks=False).run()
     pa = np.asarray(a.rec_price)
     ps = np.asarray(s.rec_price)
     diff = np.nonzero(pa != ps)[0]

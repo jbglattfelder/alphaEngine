@@ -28,7 +28,7 @@ import os
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-IN = os.path.join(HERE, "scan_results.jsonl")
+IN = os.path.join(HERE, "results_mirror_pncf_n500_T40000.jsonl")
 
 LEGACY_NULL = "PFCF"
 CURRENT_DEFAULT = "NFNF"
@@ -79,11 +79,13 @@ ARM_ORDER = _all_codes()
 SEED_COLORS = ["#2563EB", "#C2680A", "#15803D", "#7C3AED", "#DB2777", "#0891B2"]
 
 
-def load_rows() -> list[dict]:
+def load_rows(path: str = None) -> list[dict]:
     """Read every finished run; normalise older three-letter arm codes
     (pre-size scans) to four letters with size='fixed'."""
+    if path is None:
+        path = IN
     rows = []
-    with open(IN) as f:
+    with open(path) as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -92,8 +94,47 @@ def load_rows() -> list[dict]:
             if len(r["arm"]) == 3:
                 r["arm"] = r["arm"] + "F"
                 r.setdefault("size", "fixed")
+            _backfill_wall(r)
             rows.append(r)
     return rows
+
+
+def _backfill_wall(r: dict) -> None:
+    """Rows from scans predating the wall metrics carry the raw material
+    (decimated price + wealth paths, t_lock) but not the derived numbers.
+    Compute them here so an existing expensive JSONL never needs re-running.
+    CAVEAT: paths are decimated (~T/500 tick resolution), so the backfilled
+    n_reentries is a LOWER BOUND — escapes shorter than the decimation step
+    are invisible. wall_side and ammo_at_lock are effectively exact."""
+    if "wall_side" in r or "path" not in r or "t_lock" not in r:
+        return
+    path = np.asarray(r["path"], float)
+    x0 = r.get("x_0", path[0])
+    lnp = np.log(path / x0)
+    T = r["T"]
+    idx_lock = min(len(lnp) - 1, int(round(r["t_lock"] / T * (len(lnp) - 1))))
+    outside = np.abs(lnp) > 2.5
+    if not r.get("locked") or not outside.any():
+        r["wall_side"] = 0
+        r["ammo_at_lock"] = float("nan")
+        r["n_reentries"] = 0
+        return
+    r["wall_side"] = 1 if float(np.mean(lnp[idx_lock:])) > 0 else -1
+    ammo = float("nan")
+    key = "eur_long_path" if r["wall_side"] > 0 else "btc_short_path"
+    if key in r:
+        w = np.asarray(r[key], float)
+        j = min(len(w) - 1, int(round(r["t_lock"] / T * (len(w) - 1))))
+        if w[0]:
+            ammo = float(w[j] / w[0])
+    r["ammo_at_lock"] = ammo
+    first_out = int(np.argmax(outside))
+    later = outside[first_out:]
+    reentries = 0
+    for i in range(1, len(later)):
+        if later[i - 1] and not later[i]:
+            reentries += 1
+    r["n_reentries"] = int(reentries)      # lower bound (decimated path)
 
 
 def _seed_of(row: dict) -> int:
@@ -127,6 +168,7 @@ def plot_prices(rows: list[dict], save_path: str, show: bool = False) -> str:
                              squeeze=False)
     fig.suptitle(f"Block scan — emergent price, ln(p/x_0)  |  n={n}, "
                  f"T={T:,}, seeds {seeds}", fontsize=12, fontweight="bold")
+    gvals = _group_values(rows, GROUP_BY) if GROUP_BY else None
     for ax, arm in zip(axes.flat, arms):
         ax.axhline(0, color="#9CA3AF", lw=0.8, ls=":")
         for r in sorted(by_arm[arm], key=_seed_of):
@@ -134,8 +176,14 @@ def plot_prices(rows: list[dict], save_path: str, show: bool = False) -> str:
             x0 = r.get("x_0", path[0])
             lnp = np.log(path / x0)
             x = np.linspace(0, T, len(lnp))
-            color = SEED_COLORS[seeds.index(r["seed"]) % len(SEED_COLORS)]
-            ax.plot(x, lnp, lw=0.9, color=color, label=f"seed {r['seed']}")
+            if gvals is not None:
+                v = r.get(GROUP_BY)
+                color = SEED_COLORS[gvals.index(v) % len(SEED_COLORS)]
+                label = f"{GROUP_BY}={v}"
+            else:
+                color = SEED_COLORS[seeds.index(r["seed"]) % len(SEED_COLORS)]
+                label = f"seed {r['seed']}"
+            ax.plot(x, lnp, lw=0.9, color=color, label=label)
         bold = arm in (LEGACY_NULL, CURRENT_DEFAULT)
         ax.set_title(_label(arm), fontsize=9,
                      fontweight="bold" if bold else "normal")
@@ -147,7 +195,9 @@ def plot_prices(rows: list[dict], save_path: str, show: bool = False) -> str:
         ax.set_xlabel("tick")
     for row_axes in axes:
         row_axes[0].set_ylabel("ln(p / x_0)")
-    axes[0, 0].legend(fontsize=7, frameon=False)
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    seen = dict(zip(labels, handles))          # dedupe repeated sweep labels
+    axes[0, 0].legend(seen.values(), seen.keys(), fontsize=7, frameon=False)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     fig.savefig(save_path, dpi=130, bbox_inches="tight")
     print(f"wrote {save_path}")
@@ -166,10 +216,19 @@ def plot_stats(rows: list[dict], save_path: str, show: bool = False) -> str:
 
     n, T = rows[0]["n"], rows[0]["T"]
     seeds = sorted({r["seed"] for r in rows})
-    arms = [a for a in ARM_ORDER if any(r["arm"] == a for r in rows)]
-    x_of = {}
-    for i, arm in enumerate(arms):
-        x_of[arm] = i
+    if GROUP_BY:
+        # sweep mode: one x-position per swept value, arms ignored
+        arms = _group_values(rows, GROUP_BY)
+        x_of = {}
+        for i, v in enumerate(arms):
+            x_of[v] = i
+        cat_of = _cat_by_group
+    else:
+        arms = [a for a in ARM_ORDER if any(r["arm"] == a for r in rows)]
+        x_of = {}
+        for i, arm in enumerate(arms):
+            x_of[arm] = i
+        cat_of = _cat_by_arm
 
     panels = [
         ("abs_ln_drift", "|ln drift|  (price displacement)", None, "linear"),
@@ -193,13 +252,13 @@ def plot_stats(rows: list[dict], save_path: str, show: bool = False) -> str:
                 val = r.get(key)
             if val is None or (isinstance(val, float) and np.isnan(val)):
                 continue
-            x = x_of[r["arm"]]
+            x = x_of[cat_of(r)]
             color = SEED_COLORS[seeds.index(r["seed"]) % len(SEED_COLORS)]
             ax.plot(x, val, "o", ms=4, color=color, alpha=0.85)
         for arm in arms:
             vals = []
             for r in rows:
-                if r["arm"] != arm:
+                if cat_of(r) != arm:
                     continue
                 v = abs(r["ln_drift"]) if key == "abs_ln_drift" else r.get(key)
                 if v is not None and np.isfinite(v):
@@ -215,11 +274,15 @@ def plot_stats(rows: list[dict], save_path: str, show: bool = False) -> str:
         if scale == "log":
             ax.set_yscale("log")
         ax.set_xticks(range(len(arms)))
-        ax.set_xticklabels(arms, fontsize=7, rotation=45, ha="right")
-        if LEGACY_NULL in x_of:
+        if GROUP_BY:
+            ax.set_xticklabels([f"{GROUP_BY}={v}" for v in arms],
+                               fontsize=7, rotation=45, ha="right")
+        else:
+            ax.set_xticklabels(arms, fontsize=7, rotation=45, ha="right")
+        if not GROUP_BY and LEGACY_NULL in x_of:
             ax.axvspan(x_of[LEGACY_NULL] - 0.5, x_of[LEGACY_NULL] + 0.5,
                        color="#2563EB", alpha=0.07)
-        if CURRENT_DEFAULT in x_of:
+        if not GROUP_BY and CURRENT_DEFAULT in x_of:
             ax.axvspan(x_of[CURRENT_DEFAULT] - 0.5,
                        x_of[CURRENT_DEFAULT] + 0.5,
                        color="#15803D", alpha=0.10)
@@ -235,6 +298,100 @@ def plot_stats(rows: list[dict], save_path: str, show: bool = False) -> str:
     return save_path
 
 
+def plot_wall(rows: list[dict], save_path: str, show: bool = False,
+              value_weighted: bool = False) -> str:
+    """Dark corner 2, the wall caught red-handed: per arm, each run's two
+    ammunition lines over time, with a vertical dash at the lock tick.
+
+    value_weighted=False — raw COIN per side, fraction of start: the longs'
+    EUR (pushes the price UP) and the shorts' BTC (pushes it DOWN). The
+    n=500 scan showed the loser still holds 60-100%% of its coin at lock:
+    coin is the wrong currency for pushing power.
+
+    value_weighted=True — pushing POWER: each side's fuel measured in the
+    coin it BUYS, fraction of start. Up-fuel = eur_long / p (how much BTC
+    the longs' EUR can still lift); down-fuel = btc_short * p (how much
+    EUR the shorts' BTC can still absorb). The price devalues the loser's
+    fuel as it moves: the value-wall prediction is that the loser's line
+    hits ~0 exactly at the dash."""
+    import matplotlib.pyplot as plt
+
+    rows = [r for r in rows if "eur_long_path" in r]
+    if not rows:
+        print("plot_wall: no wealth paths in these rows (older scan) — skipped")
+        return ""
+    n, T = rows[0]["n"], rows[0]["T"]
+    by_arm = {}
+    for r in rows:
+        by_arm.setdefault(r["arm"], []).append(r)
+    arms = [a for a in ARM_ORDER if a in by_arm]
+
+    n_cols = 4
+    n_rows_fig = (len(arms) + n_cols - 1) // n_cols
+    fig, axes = plt.subplots(n_rows_fig, n_cols,
+                             figsize=(17, 3.2 * n_rows_fig), sharey=True,
+                             squeeze=False)
+    if value_weighted:
+        head = ("The VALUE wall — pushing power per side, in the coin it "
+                "buys, fraction of start")
+        legend = ("BLUE = longs' EUR/p (BTC it can still lift), ORANGE = "
+                  "shorts' BTC*p (EUR it can still absorb)")
+    else:
+        head = "The wealth wall — pushing coin per side, fraction of start"
+        legend = "BLUE = longs' EUR (up-fuel), ORANGE = shorts' BTC (down-fuel)"
+    fig.suptitle(f"{head}  |  n={n}, T={T:,}  |  {legend}, dash = lock tick",
+                 fontsize=11, fontweight="bold")
+    for ax, arm in zip(axes.flat, arms):
+        for r in sorted(by_arm[arm], key=_seed_of):
+            el = np.asarray(r["eur_long_path"], float)
+            bs = np.asarray(r["btc_short_path"], float)
+            if value_weighted:
+                # resample the price path onto each wealth path's grid (both
+                # are ~500-point decimations of the same T ticks)
+                price = np.asarray(r["path"], float)
+                xp = np.linspace(0.0, 1.0, len(price))
+                el_p = np.interp(np.linspace(0.0, 1.0, len(el)), xp, price)
+                bs_p = np.interp(np.linspace(0.0, 1.0, len(bs)), xp, price)
+                el = el / el_p          # EUR fuel valued in the BTC it buys
+                bs = bs * bs_p          # BTC fuel valued in the EUR it buys
+            x_el = np.linspace(0, T, len(el))
+            x_bs = np.linspace(0, T, len(bs))
+            ax.plot(x_el, el / el[0], lw=0.8, color="#2563EB", alpha=0.6)
+            ax.plot(x_bs, bs / bs[0], lw=0.8, color="#C2680A", alpha=0.6)
+            if r.get("locked"):
+                ax.axvline(r["t_lock"], color="#111827", lw=0.7, ls="--",
+                           alpha=0.5)
+        bold = arm in (LEGACY_NULL, CURRENT_DEFAULT)
+        ax.set_title(_label(arm), fontsize=9,
+                     fontweight="bold" if bold else "normal")
+        ax.set_ylim(0, None)
+        ax.grid(True, ls=":", alpha=0.35)
+    for ax in axes.flat[len(arms):]:
+        ax.set_visible(False)
+    for ax in axes[-1]:
+        ax.set_xlabel("tick")
+    for row_axes in axes:
+        row_axes[0].set_ylabel("fraction of start")
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.savefig(save_path, dpi=130, bbox_inches="tight")
+    print(f"wrote {save_path}")
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+    return save_path
+
+
+def _cat_by_arm(r: dict):
+    """Stats category in scan mode: the arm code."""
+    return r["arm"]
+
+
+def _cat_by_group(r: dict):
+    """Stats category in sweep mode: the swept key's value."""
+    return r.get(GROUP_BY)
+
+
 def print_table(rows: list[dict]) -> None:
     """Across-seed means per arm, one line per arm present in the data."""
     has_phase = "t_lock" in rows[0]
@@ -243,6 +400,9 @@ def print_table(rows: list[dict]) -> None:
            f"{'alive%':>7} {'trades':>9}")
     if has_phase:
         hdr += f" {'t_lock':>9} {'tooth_T':>8} {'tooth_sz':>8}"
+    has_wall = "wall_side" in rows[0]
+    if has_wall:
+        hdr += f" {'wall':>7} {'ammo@lk':>8} {'re-ent':>7}"
     print(hdr)
     for arm in ARM_ORDER:
         sub = [r for r in rows if r["arm"] == arm]
@@ -269,15 +429,64 @@ def print_table(rows: list[dict]) -> None:
         if has_phase:
             line += (f" {mean_of('t_lock'):>9.0f} {mean_of('tooth_period'):>8.0f} "
                      f"{mean_of('tooth_size'):>8.2f}")
+        if has_wall:
+            n_up = 0
+            n_dn = 0
+            for r in sub:
+                if r.get("wall_side") == 1:
+                    n_up += 1
+                elif r.get("wall_side") == -1:
+                    n_dn += 1
+            line += (f" {f'{n_up}+/{n_dn}-':>7} {mean_of('ammo_at_lock'):>8.3f} "
+                     f"{mean_of('n_reentries'):>7.1f}")
         print(line)
 
 
+GROUP_BY = None    # e.g. "c", "q", "band_seed", "step6_order", "size_cv":
+                   # sweep mode — prices colored by this key, stats x-axis =
+                   # its values instead of arms. Set via --group-by <key>.
+
+
+def _group_values(rows: list[dict], key: str) -> list:
+    """The sorted distinct values of the swept key (None first)."""
+    vals = sorted({r.get(key) for r in rows}, key=_none_first)
+    return vals
+
+
+def _none_first(v):
+    """Sort key: None before everything (named function — breakpointable)."""
+    if v is None:
+        return (0, 0)
+    return (1, v)
+
+
 if __name__ == "__main__":
-    rows = load_rows()
+    import sys
+    args = sys.argv[1:]
+    if "--group-by" in args:
+        i = args.index("--group-by")
+        GROUP_BY = args[i + 1]
+        del args[i:i + 2]
+    if args:
+        IN = args[0]               # plot any results file: python scan_plots_mvp.py my.jsonl
+        args = args[1:]
+    if args:
+        raise SystemExit(f"unrecognised arguments: {args} — usage: "
+                         f"python scan_plots_mvp.py [results.jsonl] "
+                         f"[--group-by KEY]")
+    if GROUP_BY:
+        print(f"SWEEP MODE: grouping by '{GROUP_BY}' "
+              f"(colors/x-axis = its values, not seeds/arms)")
+    rows = load_rows(IN)
     n, T = rows[0]["n"], rows[0]["T"]
     tag = f"mvp_scan_n{n}_T{T}"
+    if GROUP_BY:
+        tag += f"_by-{GROUP_BY}"   # sweep figures never collide with plain ones
     print(f"{len(rows)} runs loaded, arms present: "
           f"{sorted({r['arm'] for r in rows}, key=_order_key)}")
     print_table(rows)
     plot_prices(rows, os.path.join(HERE, f"scan_prices_{tag}.png"))
     plot_stats(rows, os.path.join(HERE, f"scan_stats_{tag}.png"))
+    plot_wall(rows, os.path.join(HERE, f"scan_wall_{tag}.png"))
+    plot_wall(rows, os.path.join(HERE, f"scan_wall_value_{tag}.png"),
+              value_weighted=True)
