@@ -28,7 +28,7 @@ import os
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-IN = os.path.join(HERE, "results_mirror_pncf_n500_T40000.jsonl")
+IN = os.path.join(HERE, "scan_results.jsonl")
 
 LEGACY_NULL = "PFCF"
 CURRENT_DEFAULT = "NFNF"

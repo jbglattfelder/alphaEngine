@@ -165,6 +165,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 N = 400
 T = 30_000
 SEEDS = (9, 17, 23, 42)
+CAPITAL_MIRROR = False  # True: every run gives both tribes the IDENTICAL
+                        # wealth multiset (capital_mirror) — dice 1 neutralized,
+                        # direction becomes fair-coin across seeds. False: the
+                        # realistic null (independent deals; direction is
+                        # deal-determined in Pareto arms). Rows/tags record it.
 BAND_SEEDS = (None,)   # corner-3 sweeps: e.g. (None, 1, 2, 3, 4, 5, 6, 7)
                        # redraws ONLY the band luck per run (band_dist="normal"
                        # arms; None = the global seed). Fixed-band arms ignore
@@ -176,6 +181,11 @@ ARMS = list(itertools.product(("pareto", "normal"),
                               ("fixed", "normal"),
                               ("clock", "normal"),
                               ("fixed", "normal")))
+
+# in scan_mvp.py edit block:
+ARMS = [("pareto", "normal", "clock", "fixed")]
+SEEDS = tuple(range(101, 121))     # 20 never-used capital deals
+N, T = 500, 50_000
 
 
 def arm_code(cap: str, band: str, close: str, size: str) -> str:
@@ -196,7 +206,8 @@ def run_one(cap: str, band: str, close: str, size: str, seed: int,
     drivers can sweep any parameter without touching this file."""
     cfg = Config(n=N, T=T, seed=seed, capital_dist=cap,
                  band_dist=band, closing=close, size_dist=size,
-                 band_seed=band_seed, **cfg_kwargs)
+                 band_seed=band_seed, capital_mirror=CAPITAL_MIRROR,
+                 **cfg_kwargs)
     t0 = time.time()
     sim = ScanSimulation(cfg, run_checks=False).run()
     dt = time.time() - t0
@@ -207,6 +218,7 @@ def run_one(cap: str, band: str, close: str, size: str, seed: int,
         "arm": arm_code(cap, band, close, size),
         "cap": cap, "band": band, "close": close, "size": size, "seed": seed,
         "band_seed": band_seed,
+        "capital_mirror": CAPITAL_MIRROR,
         **cfg_kwargs,
         "n": N, "T": T, "x_0": cfg.x_0, "secs": round(dt, 1),
         "p_final": float(p[-1]),

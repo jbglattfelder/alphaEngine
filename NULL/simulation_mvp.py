@@ -1435,7 +1435,7 @@ if __name__ == "__main__":
     HERE = os.path.dirname(os.path.abspath(__file__))
 
     # ---------------- edit these to override defaults ----------------
-    N = 150          # agents per side
+    N = 2          # agents per side
     T = 100_000      # ticks
     SEED = 9
     CAPITAL_DIST = "normal"   # block 2a: "pareto" | "normal"

@@ -42,7 +42,7 @@ from scan_plots_mvp import load_rows, print_table
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ---------------- edit these ----------------
-RUN = ("exp1_step6ab", "exp5_promise", "exp4_tooth")
+RUN = ("exp4_tooth",) # choices: "exp1_step6ab" "exp2_bandseed" "exp3_sizecv" "exp4_tooth" "exp5_promise"
 
 EXP1 = dict(N=400, T=30_000, SEEDS=(9, 17, 23, 42))       # the A/B
 EXP2 = dict(N=500, T=100_000, SEEDS=(9,),                 # the band sweep
