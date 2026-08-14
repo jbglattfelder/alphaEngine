@@ -15,6 +15,14 @@ answered.
                      size_cv swept up to near-all-in orders.
     exp4_tooth     : does the tooth period follow the clock? PFCF locked
                      runs with c and q varied one at a time.
+    exp5_promise   : does the exit promise pick the direction? PNCF with
+                     the own-coin promise vs the exact buy-back, across
+                     fresh band draws.        (verdict: 8/8 down vs 8/8
+                     up-and-seized — own_coin vindicated, see EVALUATION)
+    exp6_cleanmarket: which clean-market switch changes the book's
+                     structure? legacy vs stp / ccr / nxg alone vs all
+                     three, measuring standing depth, the stop-vs-timer
+                     close mix, and drift.
 
 Each experiment writes  results_<name>_n<N>_T<T>.jsonl  next to this file.
 Plot any of them afterwards with:
@@ -42,16 +50,20 @@ from scan_plots_mvp import load_rows, print_table
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ---------------- edit these ----------------
-RUN = ("exp4_tooth",) # choices: "exp1_step6ab" "exp2_bandseed" "exp3_sizecv" "exp4_tooth" "exp5_promise"
+RUN = ("exp4_tooth",)   # the fat tooth run, clean arm — the last open experiment   # recommended next: the fat tooth run with the DC
+                        # detector (exp1/2/3/5 verdicts are in EVALUATION.md)
 
 EXP1 = dict(N=400, T=30_000, SEEDS=(9, 17, 23, 42))       # the A/B
 EXP2 = dict(N=500, T=100_000, SEEDS=(9,),                 # the band sweep
             BAND_SEEDS=(None, 1, 2, 3, 4, 5, 6, 7))
 EXP3 = dict(N=400, T=30_000, SEEDS=(9, 17),               # the bite sweep
             SIZE_CVS=(0.1, 0.2, 0.3, 0.5))
-EXP4 = dict(N=400, T=150_000, SEEDS=(9, 17),              # the tooth clock
-            C_VALUES=(0.002, 0.008),                      # vary c at q=8
-            Q_VALUES=(4, 16))                             # vary q at c=0.004
+EXP4 = dict(N=400, T=150_000, SEEDS=(9, 17, 23, 42),          # the tooth clock
+            C_VALUES=(0.002, 0.004, 0.008),   # vary c at q=8; 0.004 = the
+                                              # saturation midpoint
+            Q_VALUES=(16,))                   # q=4 needs T~250k to grow teeth
+                                              # — run it as a separate job
+EXP6 = dict(N=150, T=10_000, SEEDS=(9, 17, 23, 42))
 EXP5 = dict(N=500, T=60_000, SEEDS=(9,),                  # the promise ablation
             BAND_SEEDS=(None, 1, 2, 3),
             PROMISES=("own_coin", "exact"))
@@ -189,18 +201,93 @@ def exp4_tooth() -> None:
     for c in p["C_VALUES"]:
         for seed in p["SEEDS"]:
             kwargs = dict(cap="pareto", band="fixed", close="clock",
-                          size="fixed", seed=seed, c=c, q=8)
+                          size="fixed", seed=seed, c=c, q=8,
+                          self_match="skip", neg_xbar_guard=True)
             jobs.append((kwargs, f"PFCF c={c} q=8 s{seed}"))
     for q in p["Q_VALUES"]:
         for seed in p["SEEDS"]:
             kwargs = dict(cap="pareto", band="fixed", close="clock",
-                          size="fixed", seed=seed, c=0.004, q=q)
+                          size="fixed", seed=seed, c=0.004, q=q,
+                          self_match="skip", neg_xbar_guard=True)
             jobs.append((kwargs, f"PFCF c=0.004 q={q} s{seed}"))
     path = _do_runs("exp4_tooth", p["N"], p["T"], jobs)
     print("\n  verdict — tooth_period vs the varied dial (prediction: "
           "period ~ q/(n*c), so 2x c -> half the period, 2x q -> double):")
     _grouped(path, "c", ("tooth_period", "tooth_size", "t_lock"))
     _grouped(path, "q", ("tooth_period", "tooth_size", "t_lock"))
+
+
+def exp6_cleanmarket() -> None:
+    """Which clean-market switch changes the book's structure? Legacy vs
+    each switch alone vs all three, measuring standing depth, the close
+    mix (stop vs timer initiations), and drift. Separates 'removed a bug'
+    from 'changed the market'."""
+    import json as _json
+    from simulation_mvp import Config, Simulation
+
+    class Probe(Simulation):
+        def __init__(self, cfg, **kw):
+            super().__init__(cfg, **kw)
+            self.depth_samples = []
+            self.n_sl = 0
+        def _step_trigger_stops(self, t, p_prev):
+            r = super()._step_trigger_stops(t, p_prev)
+            self.n_sl += len(r[0]) + len(r[1])
+            return r
+        def _timer_due(self, a, t):
+            due = super()._timer_due(a, t)
+            if due and not a.closing and a.pos_b != 0:
+                self.n_timer = getattr(self, "n_timer", 0) + 1
+            return due
+        def step(self, t):
+            r = super().step(t)
+            if t % 10 == 0:
+                nb = len(self.book._live(self.book.bids))
+                na = len(self.book._live(self.book.asks))
+                self.depth_samples.append(nb + na)
+            return r
+
+    # every arm pins ALL THREE switches explicitly, plus print_log off —
+    # immune to whatever the engine's Config defaults happen to be (the
+    # all-arms-identical incident: flipped defaults made "legacy" clean)
+    def _arm(sm, ccr, nxg):
+        return dict(self_match=sm, close_cancels_rest=ccr,
+                    neg_xbar_guard=nxg, print_log=False)
+    ARMS = [("legacy", _arm("allow", False, False)),
+            ("stp",    _arm("skip",  False, False)),
+            ("ccr",    _arm("allow", True,  False)),
+            ("nxg",    _arm("allow", False, True)),
+            ("clean",  _arm("skip",  True,  True))]
+    p = EXP6
+    path = os.path.join(HERE, f"results_exp6_cleanmarket_n{p['N']}_T{p['T']}.jsonl")
+    print(f"\n=== exp6_cleanmarket: {len(ARMS) * len(p['SEEDS'])} runs at "
+          f"n={p['N']}, T={p['T']:,} -> {os.path.basename(path)}")
+    t0 = time.time()
+    with open(path, "w") as f:
+        done = 0
+        total = len(ARMS) * len(p["SEEDS"])
+        for label, kw in ARMS:
+            for seed in p["SEEDS"]:
+                cfg = Config(n=p["N"], T=p["T"], seed=seed, **kw)
+                s = Probe(cfg, run_checks=False).run()
+                drift = float(np.log(s.p / cfg.x_0))
+                depth = np.asarray(s.depth_samples, float)
+                row = dict(arm="EXP6", arm6=label, seed=seed, ln_drift=drift,
+                           wall_side=int(np.sign(drift)) if abs(drift) > 2.5 else 0,
+                           depth_mean=float(depth.mean()),
+                           depth_early=float(depth[:len(depth) // 2].mean()),
+                           n_sl=s.n_sl, n_timer=getattr(s, "n_timer", 0),
+                           n_trades=len(s.trades_log))
+                f.write(_json.dumps(row) + "\n")
+                f.flush()
+                done += 1
+                eta = (time.time() - t0) / done * (total - done)
+                print(f"  [{done:2d}/{total}] {label:>6} s{seed:<3} "
+                      f"drift={drift:+.2f} depth={row['depth_mean']:.1f} "
+                      f"sl={s.n_sl} timer={row['n_timer']} (eta {eta/60:.0f} min)")
+    print("\n  verdict — which switch moves depth / close mix / drift:")
+    _grouped(path, "arm6", ("|drift|", "depth_mean", "depth_early",
+                            "n_sl", "n_timer"))
 
 
 def exp5_promise() -> None:
@@ -231,6 +318,7 @@ if __name__ == "__main__":
         "exp3_sizecv": exp3_sizecv,
         "exp4_tooth": exp4_tooth,
         "exp5_promise": exp5_promise,
+        "exp6_cleanmarket": exp6_cleanmarket,
     }
     for name in RUN:
         registry[name]()

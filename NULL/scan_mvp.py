@@ -162,9 +162,9 @@ def tooth_stats(prices, x_0, t_lock, delta=0.5):
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ---------------- edit these ----------------
-N = 400
-T = 30_000
-SEEDS = (9, 17, 23, 42)
+N = 500
+T = 150_000
+SEEDS = (9, 17, 23, 42, 201, 202, 203, 204)
 CAPITAL_MIRROR = False  # True: every run gives both tribes the IDENTICAL
                         # wealth multiset (capital_mirror) — dice 1 neutralized,
                         # direction becomes fair-coin across seeds. False: the
@@ -181,11 +181,6 @@ ARMS = list(itertools.product(("pareto", "normal"),
                               ("fixed", "normal"),
                               ("clock", "normal"),
                               ("fixed", "normal")))
-
-# in scan_mvp.py edit block:
-ARMS = [("pareto", "normal", "clock", "fixed")]
-SEEDS = tuple(range(101, 121))     # 20 never-used capital deals
-N, T = 500, 50_000
 
 
 def arm_code(cap: str, band: str, close: str, size: str) -> str:

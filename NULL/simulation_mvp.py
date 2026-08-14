@@ -60,11 +60,14 @@ from __future__ import annotations
 import csv
 import itertools
 import math
+import os
 from dataclasses import dataclass, field
 from decimal import Decimal, getcontext
 from typing import Optional
 
 import numpy as np
+
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -136,6 +139,47 @@ class Config:
                                     # short buys back EXACTLY the BTC it sold
                                     # — flow-symmetric; the ablation arm for
                                     # the down-pinning mechanism hunt)
+    save_tapes: bool = False      # True: at run end, write the raw tapes next
+                                  # to this file — tape_<tag>.npy (tick
+                                  # prices) and tape_<tag>_events.npz (every
+                                  # print's price p and tick t) — so analyses
+                                  # can be re-sliced forever without re-running
+                                  # the simulation. The event file is the big
+                                  # one (~8 bytes/print before compression:
+                                  # ~26M prints at n=5000/T=300k).
+    print_log: bool = True       # True: write log_<tag>.txt — one line per
+                                  # decision point (init, order placed, trade
+                                  # with counterparty + positions, stop hit,
+                                  # timer due, close fired, settle). The
+                                  # narrative twin of the debugger: validation
+                                  # by reading. Meant for small n/T runs; the
+                                  # file grows with event count.
+    neg_xbar_guard: bool = True  # True: a position whose implied average
+                                  # entry x_bar = -q/b is <= 0 (a residual of
+                                  # near-total profitable exits) rests NO TP
+                                  # and arms NO stop — its TP would quote a
+                                  # NEGATIVE price (zombie ask corrupting
+                                  # best_ask; 272/10k ticks at n=150 in the
+                                  # legacy null) and its stop level is
+                                  # negative, i.e. dead anyway. The timer
+                                  # sweeps such residuals. False = legacy.
+    self_match: str = "skip"     # "allow" (legacy: the match walk will fill
+                                  # an agent's order against its OWN resting
+                                  # paper — wash prints that move last_price
+                                  # and stall closes) | "skip" (self-trade
+                                  # prevention, cancel-resting policy: when
+                                  # an incoming order would cross the same
+                                  # agent's resting paper, that paper is
+                                  # canceled — never traded with, never left
+                                  # standing as a crossed book)
+    close_cancels_rest: bool = False  # True: while an agent is in close mode,
+                                  # ALL its resting orders are purged before
+                                  # every close fire (not just tp/entry refs at
+                                  # close start — an entry can fire DURING close
+                                  # mode and rest a fresh bid, which the close
+                                  # then eats in a self-trade loop: ~40 wash
+                                  # prints per episode, stalled closes, price
+                                  # nudged by one-party prints). False = legacy.
     exp_mode: str = "decimal"  # "decimal" (DEFAULT: per-agent band
                                # multipliers precomputed via decimal exp at
                                # init; the hot path is pure IEEE +,*,/ —
@@ -150,6 +194,7 @@ class Config:
                                    # on their own (seed, 0x6E1C, t) stream) |
                                    # "array" (reproduces the legacy frozen
                                    # commit bit-for-bit; kept for verification)
+    run_checks: bool = True      # True: perform sanity checks on the simulation
     x_min: Optional[float] = None    # Pareto floor; K/(10n) when None
     epsilon: Optional[float] = None  # bankruptcy threshold (EUR); 0.01*x_min when None
 
@@ -165,6 +210,7 @@ class Config:
         assert self.step6_order in ("shuffled", "array")
         assert self.exit_promise in ("own_coin", "exact")
         assert self.exp_mode in ("libm", "decimal")
+        assert self.self_match in ("allow", "skip")
         assert self.size_dist in ("fixed", "normal")
         assert self.band_dist in ("fixed", "normal")
         assert self.closing in ("clock", "normal")
@@ -274,6 +320,7 @@ class Book:
         self.btc_eps: float = size_eps            # BTC dust
         self.eur_eps: float = size_eps * x_ref    # EUR dust (equal at the x_0 gauge)
         self._by_ref: dict[int, Order] = {}       # oref -> order, for cancel()
+        self.skip_self = False        # set by Simulation from cfg.self_match
 
     # ── small helpers ────────────────────────────────────────────────────────
     def eps_of(self, o: Order) -> float:
@@ -403,6 +450,16 @@ class Book:
                 crosses = maker.price >= o.price
             if not crosses:
                 break                      # book is sorted: nothing further crosses
+
+            if self.skip_self and maker.agent_id == o.agent_id:
+                # self-trade prevention, CANCEL-RESTING policy: the agent's
+                # own stale paper dies instead of trading with it. (Merely
+                # skipping it leaves a standing crossed book — own TP resting
+                # through an own stale bid — which later arrivals rip apart
+                # at absurd prices: the n=5000 order-book blow-up.)
+                maker.active = False
+                i += 1
+                continue
 
             rate = maker.price             # ── trade at the MAKER's rate ──
 
@@ -782,6 +839,12 @@ def cfg_tag(cfg: Config) -> str:
         tag += f"_promise-{cfg.exit_promise}"
     if cfg.capital_mirror:
         tag += "_capmirror"
+    if cfg.close_cancels_rest:
+        tag += "_ccr"
+    if cfg.self_match != "allow":
+        tag += "_stp"
+    if cfg.neg_xbar_guard:
+        tag += "_nxg"
     if cfg.exp_mode != "decimal":
         tag += "_libm"
     if cfg.step6_order != "shuffled":
@@ -810,15 +873,16 @@ class Simulation:
         8. record      — series + trades logged; conservation asserted
     """
 
-    def __init__(self, cfg: Config, run_checks: bool = True) -> None:
+    def __init__(self, cfg: Config) -> None:
         self.cfg = cfg
         self.agents = build_agents(cfg)
         self.book = Book(last_price=cfg.x_0,
                          size_eps=1e-12 / cfg.x_0,   # dust in the model's own units
                          x_ref=cfg.x_0)
+        self.book.skip_self = (cfg.self_match == "skip")
         self.p = cfg.x_0                  # the recorded price; mirrors book.last_price
         self.t = 0
-        self.run_checks = run_checks
+        self.run_checks = cfg.run_checks
         self.stopped_reason: Optional[str] = None
 
         # conservation reference (nothing enters or leaves the market)
@@ -849,7 +913,10 @@ class Simulation:
 
         # trade log for trades_mvp.csv: one row per print, tagged by the TAKER
         # (the incoming order that walked the book)
-        self.trades_log: list[tuple] = []        # (tick, trade_id, agent, side, size, price)
+        self.trades_log: list[tuple] = []        # (tick, trade_id, taker, side,
+                                                 #  size, price, buy_agent,
+                                                 #  sell_agent) — [5]=price is
+                                                 #  load-bearing for consumers
         self._next_trade_id = 1
 
         # deepest-book tracker for the orderbook plot
@@ -859,6 +926,23 @@ class Simulation:
         self.deepest_price = cfg.x_0
 
         self._trades_this_tick: list[Trade] = []
+
+        # print_log: the narrative log (one line per decision point)
+        self._logf = None
+        if cfg.print_log:
+            self._logf = open(os.path.join(HERE, f"log_{cfg_tag(cfg)}.txt"), "w")
+            self._plog(f"CONFIG {cfg_tag(cfg)} | n={cfg.n}/side, T={cfg.T:,}, "
+                       f"seed={cfg.seed}, x_0={cfg.x_0}")
+            for a in self.agents:
+                self._plog(f"t=0 INIT {a.id} {'long' if a.is_long else 'short'}"
+                           f" | K0={a.K0:.2f} EUR={a.eur:.2f} BTC={a.btc:.4f}"
+                           f" | timer d={a.d} q_i={a.q_i:.2f}"
+                           f" tp={a.tp_band:.4f} sl={a.sl_band:.4f}")
+
+    def _plog(self, msg: str) -> None:
+        """One narrative-log line (no-op unless cfg.print_log)."""
+        if self._logf is not None:
+            self._logf.write(msg + "\n")
 
     # ── plumbing ─────────────────────────────────────────────────────────────
     def alive(self) -> list[Agent]:
@@ -874,6 +958,15 @@ class Simulation:
                 rest_residual: bool = True) -> None:
         """Send an order to the book; apply the resulting trades to both
         wallets; advance the recorded price. The taker is o's agent."""
+        if self._logf:
+            kind = "close/tp" if o.is_close else "entry"
+            style = ("market" if (o.is_buy and o.price > 1e12) or
+                     ((not o.is_buy) and o.price < 1e-9) else "limit")
+            px_txt = "MKT" if style == "market" else f"{o.price:.6f}"
+            self._plog(f"t={self.t} {o.agent_id} PLACE "
+                       f"{'buy' if o.is_buy else 'sell'} {o.size:.6f} @ "
+                       f"{px_txt} [{style}, {kind}"
+                       f"{', rests' if rest_residual else ''}]")
         trades = self.book.submit(o, eur_budget=eur_budget,
                                   btc_budget=btc_budget,
                                   rest_residual=rest_residual)
@@ -884,8 +977,17 @@ class Simulation:
         taker_side = "buy" if o.is_buy else "sell"
         for tr in trades:
             self.trades_log.append((self.t, self._next_trade_id, o.agent_id,
-                                    taker_side, tr.size, tr.price))
+                                    taker_side, tr.size, tr.price,
+                                    tr.buy_agent, tr.sell_agent))
             self._next_trade_id += 1
+            if self._logf:
+                mk = tr.sell_agent if o.is_buy else tr.buy_agent
+                tag = "  <-- SELF-TRADE" if tr.buy_agent == tr.sell_agent else ""
+                self._plog(f"t={self.t} TRADE#{self._next_trade_id - 1} "
+                           f"{tr.buy_agent} buys {tr.size:.6f} from "
+                           f"{tr.sell_agent} @ {tr.price:.6f} | taker "
+                           f"{o.agent_id} {taker_side}, maker {mk} | "
+                           f"px -> {self.book.last_price:.6f}{tag}")
         self._trades_this_tick.extend(trades)
 
     def _apply_trades(self, trades: list[Trade]) -> None:
@@ -930,6 +1032,10 @@ class Simulation:
             return                    # no armed position to settle
         if self._close_undelivered(a):
             return                    # promise not yet delivered
+        if self._logf:
+            self._plog(f"t={self.t} {a.id} SETTLE: bank b={a.pos_b:+.6f} "
+                       f"q={a.pos_q:+.2f} | wallet EUR={a.eur:.2f} "
+                       f"BTC={a.btc:.4f} | clock reset")
         a.realized_base += a.pos_b    # leftover coins -> the BTC bank
         a.realized_pnl += a.pos_q     # leftover euros -> the EUR bank
         a.pos_b = 0.0
@@ -941,6 +1047,14 @@ class Simulation:
             a.entry_ref = None
         a.clear_orders()
         a.reset_pressure()            # the clock restarts for the next round
+
+    def _purge_agent_orders(self, agent_id) -> None:
+        """close_cancels_rest: cancel every live resting order of this agent,
+        by book scan (ref slots can miss orders placed after close began)."""
+        for queue in (self.book.bids, self.book.asks):
+            for o in queue:
+                if o.agent_id == agent_id and o.size > 0.0:
+                    self.book.cancel(o.oref)
 
     def _timer_due(self, a: Agent, t: int) -> bool:
         """Block 2c — is the timer exit due for a HOLDING agent?
@@ -993,6 +1107,9 @@ class Simulation:
                 self.book.cancel(a.tp_ref)
                 a.tp_ref = None
 
+            if (cfg.neg_xbar_guard and a.pos_b != 0
+                    and a.avg_entry_price() <= 0.0):
+                continue          # neg-x_bar residual: timer-only (see Config)
             if a.pos_b != 0 and not a.closing and a.tp_ref is None:
                 if a.is_long:
                     # long TP: SELL the held BTC one band above entry
@@ -1036,6 +1153,9 @@ class Simulation:
         sl_buys: list[tuple] = []
         sl_sells: list[tuple] = []
         for a in self.alive():
+            if (self.cfg.neg_xbar_guard and a.pos_b != 0
+                    and a.avg_entry_price() <= 0.0):
+                continue      # neg-x_bar residual: stale stop is void
             if a.pos_b != 0 and not a.closing and a.sl_level is not None:
                 px = self.book.last_price
                 if a.sl_is_buy:
@@ -1045,12 +1165,18 @@ class Simulation:
                 if hit:
                     a.closing = True
                     a.close_reason = "sl"
+                    if self._logf:
+                        self._plog(f"t={t} {a.id} STOP hit: last {px:.6f} "
+                                   f"through level {a.sl_level:.6f} -> closing"
+                                   f" (pos_b={a.pos_b:+.6f})")
                     if a.tp_ref is not None:
                         self.book.cancel(a.tp_ref)
                         a.tp_ref = None
                     if a.entry_ref is not None:
                         self.book.cancel(a.entry_ref)
                         a.entry_ref = None
+                    if self.cfg.close_cancels_rest:
+                        self._purge_agent_orders(a.id)
                     if a.pos_b > 0 and a.is_long:
                         # long cover: sell the position, capped by held BTC
                         qty = min(a.pos_b, max(a.btc, 0.0))
@@ -1078,12 +1204,17 @@ class Simulation:
                     continue
                 a.closing = True
                 a.close_reason = "timer"
+                if self._logf:
+                    self._plog(f"t={t} {a.id} TIMER due -> closing "
+                               f"(pos_b={a.pos_b:+.6f}, pos_q={a.pos_q:+.2f})")
                 if a.tp_ref is not None:
                     self.book.cancel(a.tp_ref)
                     a.tp_ref = None
                 if a.entry_ref is not None:
                     self.book.cancel(a.entry_ref)
                     a.entry_ref = None
+                if self.cfg.close_cancels_rest:
+                    self._purge_agent_orders(a.id)
 
     def _step_closes_and_entries(self, t: int, sl_buys: list, sl_sells: list) -> None:
         """Steps 4+5. First the staged stop closes walk the book as market
@@ -1192,6 +1323,8 @@ class Simulation:
         (the eur_budget is the true terminator; the 4x size just gives
         headroom for cheap asks). Long: sell all held position BTC into the
         bids. A residual simply tries again next tick."""
+        if self.cfg.close_cancels_rest:
+            self._purge_agent_orders(a.id)
         if not self._close_undelivered(a):
             self._settle_if_flat(a)
             return
@@ -1365,6 +1498,17 @@ class Simulation:
                 break
         if self.stopped_reason is None:
             self.stopped_reason = "reached T"
+        if self.cfg.save_tapes:
+            base = os.path.join(HERE, f"tape_{cfg_tag(self.cfg)}")
+            np.save(base + ".npy", np.asarray(self.rec_price))
+            np.savez_compressed(base + "_events.npz",
+                                p=np.asarray([r[5] for r in self.trades_log]),
+                                t=np.asarray([r[0] for r in self.trades_log]))
+        if self._logf:
+            self._plog(f"t={self.cfg.T} END p={self.p:.6f} "
+                       f"ln(p/x0)={math.log(self.p / self.cfg.x_0):+.4f}")
+            self._logf.close()
+            self._logf = None
         return self
 
     def summary(self) -> str:
@@ -1405,19 +1549,22 @@ class Simulation:
         return path
 
     def write_trades_csv(self, path: Optional[str] = None) -> str:
-        """The market trades, one row per print. agent_id and buy/sell name
-        the TAKER (the marketable order that walked the book); size is BTC.
-        `price` is appended beyond the requested columns — delete the last
-        column if unwanted."""
+        """The market trades, one row per print — BOTH parties. The first six
+        columns are unchanged (agent_id/buy_sell = the TAKER, size in BTC);
+        appended: buy_agent, sell_agent, maker_id. A per-agent ledger needs
+        the appended columns — filtering on agent_id alone sees only the
+        taker half of an agent's fills (~50% of its volume)."""
         if path is None:
             path = f"trades_{cfg_tag(self.cfg)}.csv"
         with open(path, "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["tick", "trade_id", "agent_id", "buy_sell", "size", "price"])
+            w.writerow(["tick", "trade_id", "agent_id", "buy_sell", "size",
+                        "price", "buy_agent", "sell_agent", "maker_id"])
             for row in self.trades_log:
-                tick, trade_id, agent_id, side, size, price = row
+                tick, trade_id, agent_id, side, size, price, ba, sa = row
+                maker = sa if side == "buy" else ba
                 w.writerow([tick, trade_id, agent_id, side, repr(float(size)),
-                            repr(float(price))])
+                            repr(float(price)), ba, sa, maker])
         return path
 
 
@@ -1426,17 +1573,12 @@ class Simulation:
 # ═════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    import os
     import time
     t = time.time()
 
-    # all outputs land NEXT TO THIS FILE (the NULL/ dir), never in the CWD:
-    # relative paths would scatter pngs/csvs into whatever dir you ran from.
-    HERE = os.path.dirname(os.path.abspath(__file__))
-
     # ---------------- edit these to override defaults ----------------
     N = 2          # agents per side
-    T = 100_000      # ticks
+    T = 150_000      # ticks
     SEED = 9
     CAPITAL_DIST = "normal"   # block 2a: "pareto" | "normal"
     BAND_DIST = "fixed"       # block 2b: "fixed"  | "normal"

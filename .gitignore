@@ -6,9 +6,12 @@ arch/
 runs/
 eval/
 old/
+wash_trading/
 tmp/
 *.csv
 *.patch
 *.npz
 *.sh
 *.xls
+*.npy
+*.jsonl

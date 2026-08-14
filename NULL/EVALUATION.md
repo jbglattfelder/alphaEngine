@@ -288,3 +288,56 @@ so the frozen record is unchanged — and a Mac run of the exp5 control
 config reproduced the Linux trajectory to the last bit. Cross-machine
 reproducibility is restored. The libm arm remains for the legacy lineage
 proof, which verify_mvp.py pins explicitly.
+
+---
+
+## Addendum 4: the clean market — wash trades, zombie quotes, and what survives
+
+**The tape was talking to itself (self-trades).** Building per-agent
+ledgers (arXiv:2411.14068) for the n=2 world exposed two data facts:
+the trades CSV logged only the taker side (half of every agent's fills
+invisible — the CSV now carries both parties), and the engine let an
+agent's order fill against its OWN resting paper. Audited mechanism: a
+holding-phase TP crossing the agent's stale entry residual from an
+earlier cycle. Wash prints move last_price and stall closes. Fix:
+`self_match="skip"` — self-trade prevention in the matching walk, with
+the CANCEL-RESTING policy (the crossing own paper is canceled, never
+traded, never left standing). The first attempt (skip-and-leave) stood
+crossed books that later arrivals ripped apart at absurd prices — the
+n=5000 order-book blow-up — and is documented here as the cautionary
+half of the fix.
+
+**The book quoted below zero (zombie asks).** A long that sells nearly
+all of its position slightly above average leaves a residual whose
+implied entry x_bar = -q/b is NEGATIVE; its TP then rests at a negative
+price and its stop level is negative — a dead stop. In the frozen null
+this happens on 272 of 10,000 ticks at n=150: never trading, but
+corrupting best_ask, skipping entries, and disarming stops. Fix:
+`neg_xbar_guard` — such residuals rest no TP and arm no stop; the
+timer sweeps them.
+
+**Attribution (exp6, 5 arms x 4 seeds).** `close_cancels_rest` is
+bit-inert — 4/4 seeds identical to legacy; the existing ref-cancels
+already cover close-time paper. `stp` and `nxg` are both real: each
+diverges every trajectory and each thins the standing book by ~25-30%
+— the legacy book's extra depth was the two pathologies' paper, not
+liquidity. No directional or systematic statistical shift beyond seed
+chaos: bug fixes, not new physics. (Method note: the first exp6 run
+produced five bit-identical arms because flipped Config defaults made
+the "legacy" arm clean — experiment arms now pin every switch
+explicitly. Defaults are an interface contract.)
+
+**The flagship survives (clean n=5000).** Same landmark config plus
+stp+nxg: the market finds the same -2.2 wealth shoulder by a different
+route, prints are unchanged (wash was 0.01% at scale), and on the
+stationary segment in event time the laws reproduce: N(delta) ~
+delta^-1.67 (legacy -1.70) and mean-overshoot/delta = 0.95 (legacy
+1.00), kurtosis single-digit. The large-n stationary regime and the
+FX overshoot law are properties of the crowd, not of the bugs.
+
+**Recommendation.** The next frozen reference flips `self_match="skip"`
+and `neg_xbar_guard=True` (each fixes a demonstrated pathology);
+`close_cancels_rest` stays available but off (inert); `print_log` and
+`save_tapes` are instruments, off by default. Until that re-freeze,
+engine defaults remain legacy — the verify gate and every fingerprint
+depend on it.
