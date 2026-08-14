@@ -929,6 +929,7 @@ class Simulation:
 
         # print_log: the narrative log (one line per decision point)
         self._logf = None
+        self._runs: dict[str, list] = {}   # retry-compression state (_plog)
         if cfg.print_log:
             self._logf = open(os.path.join(HERE, f"log_{cfg_tag(cfg)}.txt"), "w")
             self._plog(f"CONFIG {cfg_tag(cfg)} | n={cfg.n}/side, T={cfg.T:,}, "
@@ -940,9 +941,38 @@ class Simulation:
                            f" tp={a.tp_band:.4f} sl={a.sl_band:.4f}")
 
     def _plog(self, msg: str) -> None:
-        """One narrative-log line (no-op unless cfg.print_log)."""
-        if self._logf is not None:
-            self._logf.write(msg + "\n")
+        """One narrative-log line (no-op unless cfg.print_log). Market-close
+        retry loops ("residual tries again next tick") are compressed PER
+        AGENT: the first attempt is logged, repeats are counted across any
+        interleaved lines, and one summary is written when the run resolves
+        (the agent's close fills, or it does something else)."""
+        if self._logf is None:
+            return
+        parts = msg.split(" ", 1)
+        body = parts[1] if parts[0].startswith("t=") and len(parts) == 2 else msg
+        agent = body.split(" ", 1)[0]
+
+        run = self._runs.get(agent)
+        if run is not None and run[0] == body:
+            run[1] += 1                          # suppressed repeat
+            return
+        if run is not None:
+            self._flush_run(agent, filled=False)  # agent moved on to something else
+        for a in [a for a, r in self._runs.items() if f"taker {a} " in msg]:
+            self._flush_run(a, filled=True)       # a trade resolved that run
+        if "[market, close" in body:
+            self._runs[agent] = [body, 0]         # start tracking a retry run
+        self._logf.write(msg + "\n")
+
+    def _flush_run(self, agent: str, filled: bool) -> None:
+        """Summary line for a compressed retry run."""
+        body, n = self._runs.pop(agent)
+        if not n:
+            return
+        empty = "bid side was empty" if " sell " in f" {body} " else "ask side was empty"
+        outcome = "close filled" if filled else "close attempt moved on"
+        self._logf.write(f"t={self.t} {agent} {outcome} after {n} retries "
+                         f"({empty})\n")
 
     # ── plumbing ─────────────────────────────────────────────────────────────
     def alive(self) -> list[Agent]:
@@ -1507,6 +1537,8 @@ class Simulation:
         if self._logf:
             self._plog(f"t={self.cfg.T} END p={self.p:.6f} "
                        f"ln(p/x0)={math.log(self.p / self.cfg.x_0):+.4f}")
+            for a in list(self._runs):
+                self._flush_run(a, filled=False)
             self._logf.close()
             self._logf = None
         return self

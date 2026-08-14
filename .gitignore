@@ -5,6 +5,7 @@ __pycache__/
 arch/
 runs/
 eval/
+validate/
 old/
 wash_trading/
 tmp/

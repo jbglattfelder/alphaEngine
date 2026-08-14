@@ -341,3 +341,21 @@ and `neg_xbar_guard=True` (each fixes a demonstrated pathology);
 `save_tapes` are instruments, off by default. Until that re-freeze,
 engine defaults remain legacy — the verify gate and every fingerprint
 depend on it.
+
+---
+
+## Addendum 5: the tooth clock law
+
+The sawtooth's rhythm follows the winners' deployment clock. On the
+clean arm (stp+nxg), n=400, T=150k, four seeds, the DC tooth census
+gives period ~ c^-0.98 over c in {0.002, 0.004, 0.008} (prediction -1;
+midpoint ratios 2.18 and 1.80 against the predicted 2.0). Halve the
+clock, double the tooth. RETRACTION: the earlier "saturates at fast
+clocks" reading came from confounded backfill pooling (q-varied rows
+inflating the c=0.004 cell) and does not survive proper measurement.
+Tooth amplitudes stay in the universal 1.4-3.3 e-fold band; directions
+split 7 up / 8 down across seeds, as the deal-decides resolution
+requires. Open remainder: the q exponent (2 usable runs, ratio 1.23 vs
+predicted 2.0) needs a dedicated q in {4, 16} job at T~250k — and the
+clean arm scrambled q=16's lock times relative to legacy, a note for
+the finite-size study.

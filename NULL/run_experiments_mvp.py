@@ -226,8 +226,11 @@ def exp6_cleanmarket() -> None:
     from simulation_mvp import Config, Simulation
 
     class Probe(Simulation):
-        def __init__(self, cfg, **kw):
-            super().__init__(cfg, **kw)
+        def __init__(self, cfg, run_checks=True):
+            try:
+                super().__init__(cfg, run_checks=run_checks)
+            except TypeError:      # engine without the toggle: always-checked
+                super().__init__(cfg)
             self.depth_samples = []
             self.n_sl = 0
         def _step_trigger_stops(self, t, p_prev):

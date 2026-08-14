@@ -39,7 +39,10 @@ class ScanSimulation(Simulation):
     the record step — the dynamics (and bit-equality) are untouched."""
 
     def __init__(self, cfg, run_checks=True):
-        super().__init__(cfg, run_checks=run_checks)
+        try:
+            super().__init__(cfg, run_checks=run_checks)
+        except TypeError:      # engine without the toggle: always-checked
+            super().__init__(cfg)
         self.rec_eur_long = []
         self.rec_btc_long = []
         self.rec_eur_short = []
@@ -162,9 +165,9 @@ def tooth_stats(prices, x_0, t_lock, delta=0.5):
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ---------------- edit these ----------------
-N = 500
-T = 150_000
-SEEDS = (9, 17, 23, 42, 201, 202, 203, 204)
+N = 400
+T = 30_000
+SEEDS = (9, 17, 23, 42)
 CAPITAL_MIRROR = False  # True: every run gives both tribes the IDENTICAL
                         # wealth multiset (capital_mirror) — dice 1 neutralized,
                         # direction becomes fair-coin across seeds. False: the
