@@ -205,7 +205,7 @@ def run_one(cap: str, band: str, close: str, size: str, seed: int,
     cfg = Config(n=N, T=T, seed=seed, capital_dist=cap,
                  band_dist=band, closing=close, size_dist=size,
                  band_seed=band_seed, capital_mirror=CAPITAL_MIRROR,
-                 **cfg_kwargs)
+                 run_checks=False,print_log=False, **cfg_kwargs)
     t0 = time.time()
     sim = ScanSimulation(cfg, run_checks=False).run()
     dt = time.time() - t0

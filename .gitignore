@@ -3,11 +3,7 @@
 __pycache__
 __pycache__/
 arch/
-runs/
-eval/
-validate/
 old/
-wash_trading/
 tmp/
 *.csv
 *.patch
