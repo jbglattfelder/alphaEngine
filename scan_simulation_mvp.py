@@ -174,7 +174,6 @@ def tooth_stats(prices, x_0, t_lock, delta=0.5):
 N = 400
 T = 30_000
 SEEDS = (9, 17, 23, 42)
-CAPITAL_MIRROR = False  # True: every run gives both tribes the IDENTICAL
                         # wealth multiset (capital_mirror) — dice 1 neutralized,
                         # direction becomes fair-coin across seeds. False: the
                         # realistic null (independent deals; direction is
@@ -210,9 +209,8 @@ def run_one(cap: str, band: str, close: str, size: str, seed: int,
     drivers can sweep any parameter without touching this file."""
     cfg = Config(n=N, T=T, seed=seed, capital_dist=cap,
                  band_dist=band, closing=close, size_dist=size,
-                 band_seed=band_seed, capital_mirror=CAPITAL_MIRROR,
-                 save_csv=False,
-                 run_checks=False,print_log=False, **cfg_kwargs)
+                 band_seed=band_seed,
+                 save_csv=False, print_log=False, **cfg_kwargs)
     t0 = time.time()
     sim = ScanSimulation(cfg, run_checks=False).run()
     dt = time.time() - t0
@@ -223,7 +221,6 @@ def run_one(cap: str, band: str, close: str, size: str, seed: int,
         "arm": arm_code(cap, band, close, size),
         "cap": cap, "band": band, "close": close, "size": size, "seed": seed,
         "band_seed": band_seed,
-        "capital_mirror": CAPITAL_MIRROR,
         **cfg_kwargs,
         "n": N, "T": T, "x_0": cfg.x_0, "secs": round(dt, 1),
         "p_final": float(p[-1]),

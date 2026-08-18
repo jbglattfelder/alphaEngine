@@ -1,58 +1,47 @@
 """
-simulation_mvp.py — The Alpha Engine null model, rebuilt from scratch.
+simulation_mvp.py — the Alpha Engine null model.
 
-WHAT THIS IS
-------------
-A from-zero carve-out of the FROZEN null model (commit 6f5ff32): the
-coin-symmetric pure CLOB with impatience. One file, no legacy arms, every
-method commented, no lambdas, no one-liners that a breakpoint can't land on.
+THE MODEL
+---------
+A closed two-currency market (BTC/EUR). n "longs" (start EUR-heavy, buy
+BTC) and n "shorts" (start BTC-heavy, sell BTC); side is fixed for life.
+There is no external price feed and no external money: THE PRICE IS THE
+LAST TRADE. Every agent only ever does four things:
 
-It is BIT-IDENTICAL to the legacy engine's shipped default
-(entry_mode="rest", close_mode="home", exit_promise="own_coin",
-book_mode="coin", sl_mode="market", hold_fires_close=True, x_accounting,
-log_thresholds, symmetric_solvency) — verified by verify_mvp.py, which runs
-both engines and asserts the recorded price series are equal to the bit.
-
-THE MODEL IN ONE PARAGRAPH
---------------------------
-A closed two-currency market (BTC/EUR). n "longs" (start EUR-heavy, buy BTC)
-and n "shorts" (start BTC-heavy, sell BTC); side is fixed for life. No
-external price feed, no external money: THE PRICE IS THE LAST TRADE. Every
-agent can only ever do four things:
     1. JOIN        — an internal clock fires; the agent opens one position.
     2. LEAVE HAPPY — a take-profit limit RESTS in the book ("wake me at +1%").
     3. LEAVE SAD   — a stop-loss fires a market order ("get me out NOW").
-    4. TIME OUT    — the same clock fires while holding: exit at market.
-Liquidity is other agents' unrealized profit (resting TPs) plus waiting
-wishes (resting entry residuals). Money is conserved exactly; PnL is
-zero-sum; runs are bit-identical across machines.
+    4. TIME OUT    — the clock fires while holding: exit at market.
 
-THE THREE DICE (all rolled before the first tick; after that, clockwork)
-------------------------------------------------------------------------
-    dice 1 — who gets the money   : the capital draw        (main stream)
-    dice 2 — who wakes up first   : the phase jitter        (seed + 90210)
-    dice 3 — who's first in queue : per-tick submit shuffles
-              (seed, 0x59A7, t) for TP resting,
-              (seed, 0xA1FA, t) for closes & entries.
+Liquidity is other agents' unrealized profit (resting take-profits) plus
+waiting wishes (resting entry residuals). Money is conserved exactly and
+checked every tick; PnL is zero-sum; the matching engine never fills an
+agent against its own resting paper (self-trade prevention, cancel-resting
+policy) and no order ever rests at a non-positive price.
 
-INTERCHANGEABLE BLOCKS (the experiment switches; defaults = the frozen null)
-----------------------------------------------------------------------------
-    capital_dist : "pareto" | "normal"   — who gets how much money (2a)
-    band_dist    : "fixed"  | "normal"   — TP/SL bands per agent   (2b)
-    closing      : "clock"  | "normal"   — timer-exit trigger      (2c)
-    size_dist    : "fixed"  | "normal"   — order fraction q_i      (2d)
-Each non-default arm draws on its OWN RNG stream, so switching one block
-cannot perturb the others (an A/B stays an A/B).
+RANDOMNESS
+----------
+Everything random is rolled before the first tick or drawn from a stream
+that is a pure function of (seed, purpose, tick); after that the run is
+clockwork. Per-agent band multipliers are precomputed with decimal exp, so
+the hot path is pure IEEE arithmetic: the same Config produces the same
+run TO THE BIT on any machine. `python validate_simulation_mvp.py` proves
+twelve invariants of all of the above in ~30 seconds.
 
-THE FOURTH DIE (step6_order)
-----------------------------
-The legacy frozen commit ran the step-6 close-refire loop in agent-array
-order — its documented (seed, 0x6E1C, t) shuffle had been committed into
-the dead bailout path by mistake (a per-tick seat privilege; HANDOFF §4.9
-vs code). This rebuild fixes it BY DEFAULT: step6_order="shuffled" is the
-new null, with its own dedicated stream. step6_order="array" reproduces
-the legacy commit bit-for-bit so the lineage stays provable — that is the
-arm verify_mvp.py checks against the reference engine.
+THE FOUR BLOCKS (the model's dials; each draws on its own RNG stream, so
+changing one cannot perturb the others)
+-----------------------------------------------------------------------
+    capital_dist : "pareto" | "normal"  — who gets how much money
+    band_dist    : "fixed"  | "normal"  — TP/SL exit bands per agent
+    closing      : "clock"  | "normal"  — how the timer exit triggers
+    size_dist    : "fixed"  | "normal"  — per-agent order fraction q_i
+
+RUNNING
+-------
+`python simulation_mvp.py` runs the block at the bottom of this file and
+writes its outputs (figures, price + trades CSVs, optional narrative log
+and raw tapes) next to the code. `scan_simulation_mvp.py` sweeps the
+blocks; everything else lives in helper/.
 """
 
 from __future__ import annotations
@@ -80,131 +69,63 @@ OUT = HERE                                   # run outputs land next to the code
 
 @dataclass
 class Config:
-    """All parameters of the null model."""
-    """NOTE: Some of these values are overridden --- see the main() function below for the actual run parameters."""
+    """Every knob of the null model. Defaults ARE the frozen null; the
+    __main__ block at the bottom overrides some for interactive runs."""
 
-    # ── population & money ───────────────────────────────────────────────────
-    n: int = 150              # agents PER SIDE (total population = 2n)
+    # ── world ────────────────────────────────────────────────────────────────
+    n: int = 150              # agents PER SIDE (population = 2n)
+    T: int = 100_000          # ticks
+    seed: int = 9             # global seed; every stream derives from it
     K: float = 1_000_000.0    # total initial capital, EUR terms (K/2 per side)
-    x_0: float = 100.0          # initial price (EUR per BTC); p(0) = x_0
+    x_0: float = 100.0        # initial price (EUR per BTC); p(0) = x_0
     f: float = 0.5            # home-currency fraction of each wallet at init
 
-    # ── block 2a: the capital draw ───────────────────────────────────────────
-    capital_dist: str = "pareto"  # "pareto" (heavy tail) | "normal" (homogeneous)
-    capital_mirror: bool = False  # True: shorts get the IDENTICAL K0 vector as
-                                  # longs (no second draw) — forces exact whale
-                                  # symmetry between the tribes. Diagnostic arm
-                                  # for the down-pinning hunt: if direction
-                                  # unanimity survives mirrored capital, the
-                                  # asymmetry is coded; if it dissolves, dice 1
-                                  # (the capital structure) was the decider.
-    alpha: float = 1.5            # Pareto tail exponent (pareto arm)
-    capital_cv: float = 0.3       # sd = cv * mean          (normal arm)
-    capital_floor: float = 0.05   # truncate below floor*mean (normal arm)
-
-    # ── the clock ────────────────────────────────────────────────────────────
+    # ── the clock (what sets the market's pace) ──────────────────────────────
     c: float = 0.004          # pressure per tick; agent i fires every d_i/c ticks
     q: int = 8                # order fraction: each open deploys wealth/q
 
-    # ── block 2b: the exit bands ─────────────────────────────────────────────
-    band_dist: str = "fixed"  # "fixed" (everyone tp/sl) | "normal" (per-agent draw)
-    band_seed: Optional[int] = None  # own seed for the band draw (None = the
-                                     # global seed). Lets an experiment redraw
-                                     # ONLY the bands while capital, jitter and
-                                     # every per-tick stream stay fixed — e.g.
-                                     # testing whether the Pareto+bands down-
-                                     # pinning survives fresh band luck.
+    # ── block: capital_dist — who gets how much money ────────────────────────
+    capital_dist: str = "pareto"  # "pareto" (heavy tail) | "normal" (homogeneous)
+    alpha: float = 1.5            # Pareto tail exponent          (pareto arm)
+    capital_cv: float = 0.3       # sd = cv * mean                (normal arm)
+    capital_floor: float = 0.05   # truncate below floor*mean     (normal arm)
+
+    # ── block: band_dist — the exit bands ────────────────────────────────────
+    band_dist: str = "fixed"  # "fixed" (everyone tp/sl) | "normal" (per-agent)
     tp: float = 0.01          # take-profit band (log distance from entry)
     sl: float = 0.01          # stop-loss band   (log distance from entry)
-    band_cv: float = 0.3      # sd = cv * band            (normal arm)
-    band_floor: float = 0.1   # truncate below floor*band (normal arm)
+    band_cv: float = 0.3      # sd = cv * band                (normal arm)
+    band_floor: float = 0.1   # truncate below floor*band     (normal arm)
+    band_seed: Optional[int] = None  # separate seed for the band draw only
+                                     # (None = the global seed): redraw band
+                                     # luck while everything else stays fixed
 
-    # ── block 2c: the timer exit ─────────────────────────────────────────────
-    closing: str = "clock"    # "clock" (pressure >= d) | "normal" (drawn holding time)
-    close_cv: float = 0.3     # holding time ~ N(d/c, cv*d/c), truncated >= 1 tick
+    # ── block: closing — how the timer exit triggers ─────────────────────────
+    closing: str = "clock"    # "clock" (pressure >= d) | "normal" (drawn time)
+    close_cv: float = 0.3     # holding time ~ N(d/c, cv*d/c), floored at 1 tick
 
-    # ── block 2d: the order size (decouples bite size from the capital draw) ─
-    # The default couples everything to capital: size ~ wealth/q AND clock
-    # d ~ K0, which secretly makes every agent's VOLUME THROUGHPUT equal
-    # (size x rate = (K0/q)(c/K0) = c/q for all). size_dist="normal" gives
-    # each agent its own fraction q_i ~ N(q, size_cv*q), floored at 1.0
-    # (never more than full wealth per order) — breaking the hidden flux
-    # homogeneity on purpose, on a dedicated stream.
-    size_dist: str = "fixed"  # "fixed" (everyone wealth/q) | "normal" (per-agent q_i)
-    size_cv: float = 0.1      # q_i ~ N(q, size_cv*q), truncated >= 1.0
+    # ── block: size_dist — per-agent order fraction ──────────────────────────
+    # The default couples everything to capital: size ~ wealth/q and clock
+    # d ~ K0, which makes every agent's volume throughput equal (size x rate
+    # = c/q for all). "normal" gives each agent its own q_i on a dedicated
+    # stream, decoupling bite size from the capital draw.
+    size_dist: str = "fixed"  # "fixed" (everyone wealth/q) | "normal" (q_i)
+    size_cv: float = 0.1      # q_i ~ N(q, size_cv*q), floored at 1.0
 
-    # ── run control ──────────────────────────────────────────────────────────
-    T: int = 100_000          # ticks
-    seed: int = 9             # global seed; every stream derives from it
-    exit_promise: str = "own_coin"  # "own_coin" (each tribe delivers its OWN
-                                    # coin: long delivers BTC, short re-spends
-                                    # entry EUR — the short's TP over-buys by
-                                    # e^tp by construction) | "exact" (the
-                                    # short buys back EXACTLY the BTC it sold
-                                    # — flow-symmetric; the ablation arm for
-                                    # the down-pinning mechanism hunt)
-    save_csv: bool = True         # True: at run end, write price_btc_eur_<tag>
-                                  # .csv and trades_<tag>.csv next to the code.
-                                  # Sweeps pass False (n runs x millions of
-                                  # rows otherwise).
-    save_tapes: bool = False      # True: at run end, write the raw tapes next
-                                  # to this file — tape_<tag>.npy (tick
-                                  # prices) and tape_<tag>_events.npz (every
-                                  # print's price p and tick t) — so analyses
-                                  # can be re-sliced forever without re-running
-                                  # the simulation. The event file is the big
-                                  # one (~8 bytes/print before compression:
-                                  # ~26M prints at n=5000/T=300k).
-    print_log: bool = True       # True: write log_<tag>.txt — one line per
-                                  # decision point (init, order placed, trade
-                                  # with counterparty + positions, stop hit,
-                                  # timer due, close fired, settle). The
-                                  # narrative twin of the debugger: validation
-                                  # by reading. Meant for small n/T runs; the
-                                  # file grows with event count.
-    neg_xbar_guard: bool = True  # True: a position whose implied average
-                                  # entry x_bar = -q/b is <= 0 (a residual of
-                                  # near-total profitable exits) rests NO TP
-                                  # and arms NO stop — its TP would quote a
-                                  # NEGATIVE price (zombie ask corrupting
-                                  # best_ask; 272/10k ticks at n=150 in the
-                                  # legacy null) and its stop level is
-                                  # negative, i.e. dead anyway. The timer
-                                  # sweeps such residuals. False = legacy.
-    self_match: str = "skip"     # "allow" (legacy: the match walk will fill
-                                  # an agent's order against its OWN resting
-                                  # paper — wash prints that move last_price
-                                  # and stall closes) | "skip" (self-trade
-                                  # prevention, cancel-resting policy: when
-                                  # an incoming order would cross the same
-                                  # agent's resting paper, that paper is
-                                  # canceled — never traded with, never left
-                                  # standing as a crossed book)
-    close_cancels_rest: bool = False  # True: while an agent is in close mode,
-                                  # ALL its resting orders are purged before
-                                  # every close fire (not just tp/entry refs at
-                                  # close start — an entry can fire DURING close
-                                  # mode and rest a fresh bid, which the close
-                                  # then eats in a self-trade loop: ~40 wash
-                                  # prints per episode, stalled closes, price
-                                  # nudged by one-party prints). False = legacy.
-    exp_mode: str = "decimal"  # "decimal" (DEFAULT: per-agent band
-                               # multipliers precomputed via decimal exp at
-                               # init; the hot path is pure IEEE +,*,/ —
-                               # bit-identical ACROSS machines. Verified
-                               # Mac == Linux to the last bit, and identical
-                               # to the libm arm on glibc, so the frozen
-                               # record is unchanged) | "libm" (runtime
-                               # math.exp — kept for the legacy lineage
-                               # proof; Apple libm differs by 1 ulp on some
-                               # args, which chaos amplifies)
-    step6_order: str = "shuffled"  # "shuffled" (the fixed null: step-6 re-fires
-                                   # on their own (seed, 0x6E1C, t) stream) |
-                                   # "array" (reproduces the legacy frozen
-                                   # commit bit-for-bit; kept for verification)
-    run_checks: bool = True      # True: perform sanity checks on the simulation
-    x_min: Optional[float] = None    # Pareto floor; K/(10n) when None
-    epsilon: Optional[float] = None  # bankruptcy threshold (EUR); 0.01*x_min when None
+    # ── floors (derived when None) ───────────────────────────────────────────
+    x_min: Optional[float] = None    # Pareto capital floor; K/(10n) when None
+    epsilon: Optional[float] = None  # bankruptcy threshold; 0.01*x_min when None
+
+    # ── outputs ──────────────────────────────────────────────────────────────
+    save_csv: bool = True     # write price_btc_eur_<tag>.csv + trades_<tag>.csv
+                              # at run end (sweeps pass False)
+    save_tapes: bool = False  # write tape_<tag>.npy (tick prices) and
+                              # tape_<tag>_events.npz (every print) at run end,
+                              # so analyses can be re-sliced without re-running
+    print_log: bool = True    # write log_<tag>.txt — one narrative line per
+                              # decision point (order, trade, stop, timer,
+                              # settle); validation by reading. Grows with
+                              # event count: meant for small n/T runs
 
     def __post_init__(self) -> None:
         """Fill the derived parameters and fail loudly on nonsense."""
@@ -215,10 +136,6 @@ class Config:
         assert self.n >= 1 and self.K > 0 and self.x_0 > 0
         assert 0.0 < self.f <= 1.0 and self.alpha > 1.0
         assert self.capital_dist in ("pareto", "normal")
-        assert self.step6_order in ("shuffled", "array")
-        assert self.exit_promise in ("own_coin", "exact")
-        assert self.exp_mode in ("libm", "decimal")
-        assert self.self_match in ("allow", "skip")
         assert self.size_dist in ("fixed", "normal")
         assert self.band_dist in ("fixed", "normal")
         assert self.closing in ("clock", "normal")
@@ -328,7 +245,6 @@ class Book:
         self.btc_eps: float = size_eps            # BTC dust
         self.eur_eps: float = size_eps * x_ref    # EUR dust (equal at the x_0 gauge)
         self._by_ref: dict[int, Order] = {}       # oref -> order, for cancel()
-        self.skip_self = False        # set by Simulation from cfg.self_match
 
     # ── small helpers ────────────────────────────────────────────────────────
     def eps_of(self, o: Order) -> float:
@@ -459,12 +375,12 @@ class Book:
             if not crosses:
                 break                      # book is sorted: nothing further crosses
 
-            if self.skip_self and maker.agent_id == o.agent_id:
-                # self-trade prevention, CANCEL-RESTING policy: the agent's
-                # own stale paper dies instead of trading with it. (Merely
-                # skipping it leaves a standing crossed book — own TP resting
-                # through an own stale bid — which later arrivals rip apart
-                # at absurd prices: the n=5000 order-book blow-up.)
+            if maker.agent_id == o.agent_id:
+                # SELF-TRADE PREVENTION (cancel-resting): an order never
+                # fills against the same agent's own resting paper — the
+                # incoming order expresses newer intent, so the stale quote
+                # is canceled. (Skipping it instead would leave a standing
+                # crossed book for other agents to trade through.)
                 maker.active = False
                 i += 1
                 continue
@@ -542,7 +458,7 @@ class Agent:
     d: float              # pressure threshold: fires every d/c ticks
     tp_band: float        # this agent's take-profit band (log distance)
     sl_band: float        # this agent's stop-loss band  (log distance)
-    e_tp_up: Optional[float] = None   # exp_mode="decimal": e^{+tp_band}, e^{-tp_band},
+    e_tp_up: Optional[float] = None   # e^{+tp_band}, e^{-tp_band},
     e_tp_dn: Optional[float] = None   # e^{+sl_band}, e^{-sl_band}, precomputed once via
     e_sl_up: Optional[float] = None   # decimal at build time so the hot path never
     e_sl_dn: Optional[float] = None   # calls platform libm exp (cross-machine bits)
@@ -574,7 +490,7 @@ class Agent:
 
     def avg_entry_price(self) -> float:
         """Average entry price of the open position, x̄ = -q/b.
-        NaN for an exactly-flat position (legacy guard: a NaN entry makes
+        NaN for an exactly-flat position (a NaN entry makes
         every derived TP/SL level NaN, and NaN comparisons never trigger —
         the safe behaviour for a position that just zeroed out)."""
         if self.pos_b == 0:
@@ -608,25 +524,19 @@ class Agent:
         """The take-profit limit price: one band ABOVE entry for a long
         (sell higher), one band BELOW for a short (buy back lower)."""
         x_entry = self.avg_entry_price()
-        if self.e_tp_up is not None and self.e_tp_dn is not None:              # decimal arm: no libm exp
-            if self.is_long:
-                return x_entry * self.e_tp_up
-            return x_entry * self.e_tp_dn
+        assert self.e_tp_up is not None and self.e_tp_dn is not None
         if self.is_long:
-            return x_entry * math.exp(self.tp_band)
-        return x_entry * math.exp(-self.tp_band)
+            return x_entry * self.e_tp_up
+        return x_entry * self.e_tp_dn
 
     def sl_price(self) -> float:
         """The stop trigger price: one band BELOW entry for a long,
         one band ABOVE for a short."""
         x_entry = self.avg_entry_price()
-        if self.e_sl_up is not None and self.e_sl_dn is not None:              # decimal arm: no libm exp
-            if self.is_long:
-                return x_entry * self.e_sl_dn
-            return x_entry * self.e_sl_up
+        assert self.e_sl_up is not None and self.e_sl_dn is not None
         if self.is_long:
-            return x_entry * math.exp(-self.sl_band)
-        return x_entry * math.exp(self.sl_band)
+            return x_entry * self.e_sl_dn
+        return x_entry * self.e_sl_up
 
     # ── order sizing (X-accounting: identical formula both tribes) ───────────
     def open_size_btc(self, q_frac: int, price: float) -> float:
@@ -748,10 +658,7 @@ def build_agents(cfg: Config) -> list[Agent]:
     by c (the mean is K/(2n) exactly, by the rescaled draw)."""
     rng = np.random.default_rng(cfg.seed)          # the MAIN stream: capital only
     k0_long = draw_capital(cfg, rng, cfg.n)
-    if cfg.capital_mirror:
-        k0_short = k0_long.copy()                  # exact whale symmetry
-    else:
-        k0_short = draw_capital(cfg, rng, cfg.n)
+    k0_short = draw_capital(cfg, rng, cfg.n)
 
     # threshold normalisation (the mean, never the min: a min-statistic
     # would let one unlucky small agent set everyone's pace)
@@ -800,15 +707,14 @@ def build_agents(cfg: Config) -> list[Agent]:
             a.tp_band = max(tp_draw, cfg.band_floor * cfg.tp)
             a.sl_band = max(sl_draw, cfg.band_floor * cfg.sl)
 
-    # exp_mode="decimal" — precompute each agent's four band multipliers with
-    # decimal exp (correctly rounded, platform-independent), so no runtime
-    # libm exp remains anywhere in the dynamics. See Config.exp_mode.
-    if cfg.exp_mode == "decimal":
-        from decimal import Decimal, getcontext
-        getcontext().prec = 40
-        def dexp(v: float) -> float:
-            return float(Decimal(repr(v)).exp())
-        for a in agents:
+    # Each agent's four band multipliers e^{+-tp}, e^{+-sl} are precomputed
+    # ONCE with decimal exp (correctly rounded, platform-independent): the
+    # hot path never calls libm exp, so runs are bit-identical across
+    # machines and compilers.
+    getcontext().prec = 40
+    def dexp(v: float) -> float:
+        return float(Decimal(repr(v)).exp())
+    for a in agents:
             a.e_tp_up = dexp(a.tp_band)
             a.e_tp_dn = dexp(-a.tp_band)
             a.e_sl_up = dexp(a.sl_band)
@@ -843,20 +749,6 @@ def cfg_tag(cfg: Config) -> str:
         tag += f"_size-{cfg.size_dist}"
     if cfg.band_seed is not None:
         tag += f"_bseed{cfg.band_seed}"
-    if cfg.exit_promise != "own_coin":
-        tag += f"_promise-{cfg.exit_promise}"
-    if cfg.capital_mirror:
-        tag += "_capmirror"
-    if cfg.close_cancels_rest:
-        tag += "_ccr"
-    if cfg.self_match != "allow":
-        tag += "_stp"
-    if cfg.neg_xbar_guard:
-        tag += "_nxg"
-    if cfg.exp_mode != "decimal":
-        tag += "_libm"
-    if cfg.step6_order != "shuffled":
-        tag += "_s6array"
     return tag
 
 
@@ -887,10 +779,8 @@ class Simulation:
         self.book = Book(last_price=cfg.x_0,
                          size_eps=1e-12 / cfg.x_0,   # dust in the model's own units
                          x_ref=cfg.x_0)
-        self.book.skip_self = (cfg.self_match == "skip")
         self.p = cfg.x_0                  # the recorded price; mirrors book.last_price
         self.t = 0
-        self.run_checks = cfg.run_checks
         self.stopped_reason: Optional[str] = None
 
         # conservation reference (nothing enters or leaves the market)
@@ -1058,13 +948,12 @@ class Simulation:
 
         Each tribe promises its OWN coin: a long delivers the BTC it bought
         (done when pos_b is dust); a short re-spends the entry EUR it
-        received (done when pos_q is dust). This own-coin promise is the
-        exit rule the mirror equivariance was verified on."""
+        received (done when pos_q is dust) — each side settles in its own
+        coin, so the two sides' exit rules are exact mirrors."""
         assert self.cfg.x_min is not None
-        if not a.is_long and self.cfg.exit_promise == "own_coin":
+        if not a.is_long:
             return a.pos_q > 1e-9 * self.cfg.x_min       # EUR still to spend
         return abs(a.pos_b) > 1e-9 / self.cfg.x_0        # BTC still to deliver
-        # (exact promise: BOTH tribes settle on the BTC leg — flow-symmetric)
 
     def _settle_if_flat(self, a: Agent) -> None:
         """If the close promise is delivered, the round trip is over: bank
@@ -1090,14 +979,6 @@ class Simulation:
             a.entry_ref = None
         a.clear_orders()
         a.reset_pressure()            # the clock restarts for the next round
-
-    def _purge_agent_orders(self, agent_id) -> None:
-        """close_cancels_rest: cancel every live resting order of this agent,
-        by book scan (ref slots can miss orders placed after close began)."""
-        for queue in (self.book.bids, self.book.asks):
-            for o in queue:
-                if o.agent_id == agent_id and o.size > 0.0:
-                    self.book.cancel(o.oref)
 
     def _timer_due(self, a: Agent, t: int) -> bool:
         """Block 2c — is the timer exit due for a HOLDING agent?
@@ -1150,8 +1031,7 @@ class Simulation:
                 self.book.cancel(a.tp_ref)
                 a.tp_ref = None
 
-            if (cfg.neg_xbar_guard and a.pos_b != 0
-                    and a.avg_entry_price() <= 0.0):
+            if a.pos_b != 0 and a.avg_entry_price() <= 0.0:
                 continue          # neg-x_bar residual: timer-only (see Config)
             if a.pos_b != 0 and not a.closing and a.tp_ref is None:
                 if a.is_long:
@@ -1163,17 +1043,11 @@ class Simulation:
                     self._submit(o, btc_budget=max(a.btc, 0.0))
                 else:
                     tp_px = a.tp_price()
-                    if cfg.exit_promise == "own_coin":
-                        # short TP: BUY back one band below entry, spending
-                        # the entry EUR (size = pos_q/tp_price; budget = that
-                        # EUR — the e^tp over-buy is the promise)
-                        size = a.pos_q / tp_px
-                        budget = max(0.0, min(a.eur, a.pos_q))
-                    else:
-                        # exact: BUY back exactly the BTC sold (like a long's
-                        # TP sells exactly the BTC bought) — no over-buy
-                        size = -a.pos_b
-                        budget = max(a.eur, 0.0)
+                    # short TP: BUY back one band below entry, spending
+                    # the entry EUR (size = pos_q/tp_price; budget = that
+                    # EUR — the e^tp over-buy is the promise)
+                    size = a.pos_q / tp_px
+                    budget = max(0.0, min(a.eur, a.pos_q))
                     o = Order(a.id, is_buy=True, price=tp_px,
                               size=size, tick=t, is_close=True)
                     a.tp_ref = o.oref
@@ -1196,8 +1070,7 @@ class Simulation:
         sl_buys: list[tuple] = []
         sl_sells: list[tuple] = []
         for a in self.alive():
-            if (self.cfg.neg_xbar_guard and a.pos_b != 0
-                    and a.avg_entry_price() <= 0.0):
+            if a.pos_b != 0 and a.avg_entry_price() <= 0.0:
                 continue      # neg-x_bar residual: stale stop is void
             if a.pos_b != 0 and not a.closing and a.sl_level is not None:
                 px = self.book.last_price
@@ -1218,19 +1091,13 @@ class Simulation:
                     if a.entry_ref is not None:
                         self.book.cancel(a.entry_ref)
                         a.entry_ref = None
-                    if self.cfg.close_cancels_rest:
-                        self._purge_agent_orders(a.id)
                     if a.pos_b > 0 and a.is_long:
                         # long cover: sell the position, capped by held BTC
                         qty = min(a.pos_b, max(a.btc, 0.0))
                         sl_sells.append((a, qty))
-                    elif self.cfg.exit_promise == "own_coin":
+                    else:
                         # short cover: spend the remaining entry EUR at market
                         qty = min(a.pos_q, max(a.eur, 0.0)) / p_prev
-                        sl_buys.append((a, qty))
-                    else:
-                        # exact: cover the BTC owed, capped by affordability
-                        qty = min(-a.pos_b, max(a.eur, 0.0) / p_prev)
                         sl_buys.append((a, qty))
         return sl_buys, sl_sells
 
@@ -1256,8 +1123,6 @@ class Simulation:
                 if a.entry_ref is not None:
                     self.book.cancel(a.entry_ref)
                     a.entry_ref = None
-                if self.cfg.close_cancels_rest:
-                    self._purge_agent_orders(a.id)
 
     def _step_closes_and_entries(self, t: int, sl_buys: list, sl_sells: list) -> None:
         """Steps 4+5. First the staged stop closes walk the book as market
@@ -1367,27 +1232,17 @@ class Simulation:
         headroom for cheap asks). Long: sell all held position BTC into the
         bids. A residual simply tries again next tick."""
         assert self.cfg.x_min is not None
-        if self.cfg.close_cancels_rest:
-            self._purge_agent_orders(a.id)
         if not self._close_undelivered(a):
             self._settle_if_flat(a)
             return
         if not a.is_long:
-            if self.cfg.exit_promise == "own_coin":
-                eur_left = a.pos_q
-                if eur_left > 1e-9 * self.cfg.x_min:
-                    size = 4.0 * eur_left / max(self.book.last_price, 1e-300)
-                    o = Order(a.id, is_buy=True, price=1e18, size=size, tick=t,
-                              is_close=True)
-                    self._submit(o, eur_budget=max(0.0, min(a.eur, eur_left)),
-                                 rest_residual=False)
-            else:
-                btc_owed = -a.pos_b
-                if btc_owed > 1e-12 / self.cfg.x_0:
-                    o = Order(a.id, is_buy=True, price=1e18, size=btc_owed,
-                              tick=t, is_close=True)
-                    self._submit(o, eur_budget=max(a.eur, 0.0),
-                                 rest_residual=False)
+            eur_left = a.pos_q
+            if eur_left > 1e-9 * self.cfg.x_min:
+                size = 4.0 * eur_left / max(self.book.last_price, 1e-300)
+                o = Order(a.id, is_buy=True, price=1e18, size=size, tick=t,
+                          is_close=True)
+                self._submit(o, eur_budget=max(0.0, min(a.eur, eur_left)),
+                             rest_residual=False)
             return
         if a.pos_b > 1e-12 / self.cfg.x_0:
             o = Order(a.id, is_buy=False, price=1e-15, size=a.pos_b, tick=t,
@@ -1400,20 +1255,16 @@ class Simulation:
           - a committed close still undelivered re-fires its market order
           - every delivered promise settles (banks PnL, re-arms the clock)
 
-        ORDERING (the former seat weld, now fixed by default): _fire_close
-        prints market orders, so iteration order here is a seat privilege.
-        The legacy frozen commit ran this loop in agent-array order — its
-        0x6E1C shuffle was committed into the dead bailout path by mistake.
-        step6_order="shuffled" (default) applies that shuffle where it was
-        always meant to go: a fresh permutation per tick on the dedicated
-        (seed, 0x6E1C, t) stream. step6_order="array" reproduces the legacy
-        commit bit-for-bit and exists so verify_mvp.py can keep proving it."""
+        ORDERING: _fire_close prints market orders, so iteration order is
+        a seat privilege. The loop therefore runs in a fresh random
+        permutation every tick, on its own (seed, 0x6E1C, t) stream — no
+        agent owns a structurally early seat."""
         live_refs = set()
         for o in self.book.bids + self.book.asks:
             if o.active:
                 live_refs.add(o.oref)
         agents_6 = self.alive()
-        if self.cfg.step6_order == "shuffled" and len(agents_6) > 1:
+        if len(agents_6) > 1:
             shuffle_rng = np.random.default_rng(
                 np.random.SeedSequence((self.cfg.seed, 0x6E1C, t)))
             order = shuffle_rng.permutation(len(agents_6))
@@ -1444,17 +1295,17 @@ class Simulation:
     def _step_record(self, t: int) -> None:
         """Step 8. Log the tick's series; assert conservation; track the
         deepest book state for the orderbook plot."""
-        # conservation: the market is closed — nothing enters or leaves
-        if self.run_checks:
-            eur_total = 0.0
-            btc_total = 0.0
-            for a in self.agents:
-                eur_total += a.eur
-                btc_total += a.btc
-            assert abs(eur_total - self._eur_total0) < 1e-3 * max(abs(self._eur_total0), 1), \
-                "EUR not conserved"
-            assert abs(btc_total - self._btc_total0) < 1e-3 * max(abs(self._btc_total0), 1), \
-                "BTC not conserved"
+        # conservation, checked EVERY tick: the market is closed — nothing
+        # enters or leaves
+        eur_total = 0.0
+        btc_total = 0.0
+        for a in self.agents:
+            eur_total += a.eur
+            btc_total += a.btc
+        assert abs(eur_total - self._eur_total0) < 1e-3 * max(abs(self._eur_total0), 1), \
+            "EUR not conserved"
+        assert abs(btc_total - self._btc_total0) < 1e-3 * max(abs(self._btc_total0), 1), \
+            "BTC not conserved"
 
         n_bids, n_asks = self.book.depth_counts()
         alive_long = 0
@@ -1627,7 +1478,7 @@ if __name__ == "__main__":
     t = time.time()
 
     # ---------------- edit these to override defaults ----------------
-    N = 2          # agents per side
+    N = 150          # agents per side
     T = 150_000      # ticks
     SEED = 9
     CAPITAL_DIST = "normal"   # block 2a: "pareto" | "normal"

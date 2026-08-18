@@ -1,221 +1,160 @@
-# The Alpha Engine — POC
+# Alpha Engine — the null model
 
-A closed two-currency market (EUR / BTC) simulated from the bottom up. Two fixed
-populations of agents trade with each other through a **central limit order
-book**. There is no external price feed and no external money: the price is
-whatever the trades produce, and money is conserved exactly.
+## 1. What this is
 
-The goal is a **null model** — a market in which every behaviour is either
-derived from its rules or measured and bounded — so that when strategies,
-heterogeneity, or external traders are added later, anything new is *attributable*
-to them rather than to the plumbing.
+A **closed two-currency market** (BTC/EUR) populated by agents with **zero
+intelligence**. `n` "longs" open positions by **buying** BTC; `n` "shorts"
+open by **selling** it; side is fixed for life. At the default `f=0.5`
+every agent starts with the identical wallet (half EUR, half BTC) — the
+only asymmetry between the sides is the direction they trade. There is no
+external price feed and no external money: **the price is the last trade**, liquidity is other
+agents' resting orders, money is conserved to the bit, and PnL is exactly
+zero-sum. Every agent only ever does four things:
 
-Method: state the prediction, run the thing that can kill it, log the corpse.
-Retractions are filed at equal weight with results.
+1. **JOIN** — an internal clock fires; the agent opens one position.
+2. **LEAVE HAPPY** — a take-profit limit rests in the book ("wake me at +1%").
+3. **LEAVE SAD** — a stop-loss fires a market order ("get me out now").
+4. **TIME OUT** — the clock fires while holding: exit at market.
 
----
+**The intent.** This is a *null model* in the strict sense: the baseline
+against which any claim about markets must be measured. Before attributing a
+market phenomenon — fat tails, volatility clustering, crashes, trends,
+persistent winners — to information, strategy, or psychology, one must know
+how much of it a market produces with **none of those things**: identical
+mechanical agents, heterogeneous only in wealth, timing, and luck. Whatever
+this model already exhibits needs no explanation from intelligence. Whatever
+it lacks marks the genuine explanatory work left for cognition.
 
-## Start here
+**The philosophical context.** The model is an exercise in emergence:
+macro-structure from micro-rules that contain no trace of it. Nothing in the
+code knows what a bubble, a squeeze, a liquidity drought, or a trend is — yet
+all of them occur, driven entirely by the interaction of order-book mechanics
+with the initial dice (who got the money, who wakes first). The price that
+emerges is not an estimate of any value; it is a pure social fact, the memory
+of the last agreement. In that sense the null model is a laboratory for the
+oldest question of complexity science, applied to finance: how much of the
+world's apparent purposefulness is mechanism wearing a costume?
 
-Two documents hold the state; everything else is code.
+Runs are **deterministic and bit-portable**: the same `Config` produces the
+same run, to the last bit, on any machine (all randomness is seeded; the one
+platform-dependent function, `exp`, is precomputed with correctly-rounded
+decimal arithmetic at setup).
 
-| If you want | Read |
-| --- | --- |
-| State, orientation, direction, config, invariants, bit-check targets | **`HANDOFF-master.md`** |
-| The detailed experiment records and prediction scoring | **`FINDINGS-master.md`** |
-| The original v1 spec | `alpha_engine_poc_v1_spec.pdf` |
+## 2. The four knobs
 
-These absorb the former `CLAUDE.md`, `DIRECTION.md`, `REFERENCE.md`, all
-`HANDOFF*` and `FINDINGS_*` files. The two masters are authoritative.
+Each knob selects how one ingredient is distributed across agents. Each draws
+on its **own RNG stream**, so changing one cannot perturb the others — an A/B
+comparison stays an A/B comparison.
 
----
+| knob | options | meaning |
+|---|---|---|
+| `capital_dist` | `"pareto"` \| `"normal"` | who gets how much money (heavy-tailed whales vs a homogeneous crowd) |
+| `band_dist` | `"fixed"` \| `"normal"` | the TP/SL exit bands: identical ±1% for all, or drawn per agent |
+| `closing` | `"clock"` \| `"normal"` | the timer exit: deterministic pressure threshold, or a drawn holding time |
+| `size_dist` | `"fixed"` \| `"normal"` | order fraction: everyone deploys wealth/q, or a per-agent q_i |
 
-## What the model is
+A configuration is named by its four letters in this order — e.g. **PFCF**
+(pareto, fixed, clock, fixed) or **NFNN** (normal, fixed, normal, normal).
+Everything else (n, T, seed, bands, clock rate, floors, outputs) lives in
+`Config` at the top of `simulation_mvp.py`, one comment per field.
 
-- **Agents.** `n` "longs" and `n` "shorts"; side is fixed for life. Initial
-  capital is Pareto-drawn and rescaled so the agent total is exact.
-- **Clock.** Pressure accrues each tick while flat; at a capital-scaled threshold
-  the agent opens one position. With `hold_fires_close=True` (default) the clock
-  also runs while holding and a fire-in-position exits at market ("impatience").
-- **Exits.** Every position has a take-profit and a stop-loss. The **TP rests in
-  the book as a passive limit**; the **SL fires as a market order** when touched.
-- **The venue.** A CLOB (`book.py`). It matches; it never takes a position (except
-  the optional house maker).
-
-**There are exactly four mechanisms: open, take-profit, stop-loss, timer-exit**
-(the pressure clock also closes stale positions; the batch arm runs the first
-three). Passive depth is TP limits plus, on the default arm, resting entry
-residuals — so *liquidity is other agents' unrealized profit, plus waiting
-wishes*, and that fact drives most of the findings.
-
-One tick, **default arm (`entry_mode="rest"`, the pure CLOB shipped by
-`run_single`):** accumulate pressure → rest TPs / arm SLs → **SL closes fire as
-market orders that walk the book** → firing agents submit **marketable-to-touch
-entries that fill what crosses and REST the remainder** (a flat agent re-firing
-cancels-and-replaces its resting entry at the live price) → settle → bankruptcy →
-record. There is **no balanced-flow auction on this arm** — every entry meets the
-book directly.
-
-One tick, **`entry_mode="ioc"` (the batch hybrid — now a one-switch treatment, no
-longer any default):**
-same up to entries, then balanced buy/sell flow **nets at the last price with no
-impact** and only the **net imbalance** walks the book. This is the arm the older
-scaling-law / compact-support results were measured on; it is *not* what
-`run_single` runs.
-
-Money conservation and PnL zero-sum are asserted every tick. Runs are bit-identical
-across machines (`decimal` + `math.fsum` in the capital draw; the model is chaotic).
-
----
-
-## Modules
-
-| Module | Owns |
-| --- | --- |
-| `config.py` | All parameters + switches (single source of truth) |
-| `agents.py` | Agent + Population + House: capital draw, pressure, firing, sizing |
-| `book.py` | **The CLOB**: resting limits, price-time-priority matching, the emergent price |
-| `position.py` | Balance-sheet PnL (arXiv:2411.14068) |
-| `simulation.py` | The tick loop; wires the modules; records series |
-| `analysis.py` | Recorder, Analyser: dashboard + automated sanity checks |
-| `dc_analysis.py` | Intrinsic-time DC / overshoot instrument (BM-validated) |
-| `main.py` | Entry point |
-| `market.py` | **RETIRED** — the Dutch-auction era. Warns on import; read `book.py`. |
-
-Dependency direction: `config <- agents <- book <- simulation`. The book returns
-`Fill`s; the simulation applies them. Change parameters in `config.py` only.
-
----
-
-## Setup
+## 3. Running it (the default run)
 
 ```bash
-python3.13 -m venv .venv          # runs unchanged on 3.12
-source .venv/bin/activate
-pip install -r requirements.txt
+python simulation_mvp.py
 ```
 
-Run scripts from the repo root (they import their siblings).
+That's all. The block at the bottom of `simulation_mvp.py` runs **n=2 per
+side, T=150,000 ticks, seed 9, NFNN** — the smallest market that has all the
+mechanics, small enough to read every single decision in the log. It prints
+the resolved config and a run summary, pops six figures (set `SHOW = False`
+to suppress), and writes every output listed below next to the code.
 
----
+To run something else, edit the marked block at the bottom of the file:
 
-## Run
-
-Each script has an **edit block at the top** — change it, press Run.
-
-```bash
-python run_single.py      # one run -> dashboard.png, pnl_distribution.png, capital_distribution.png
-python export_price.py    # one run -> price_feed.csv (the DC-analysis feed)
-python scaling_law.py     # feed -> intrinsic-time scaling laws -> scaling_laws.png
-python dc_analysis.py price_feed.csv [log|relative]   # analyse any feed (needs a p_int column)
-python stylized_facts.py  # Cont (2001) scorecard
-python test_bm.py         # validate the DC/OS instrument against Brownian motion
-python test_benchmarks.py # bit-exact regression guard (benchmarks.json)
-python main.py            # legacy entry point
+```python
+N = 150                    # agents per side
+T = 100_000                # ticks
+CAPITAL_DIST = "pareto"    # ... the four knobs; pareto/fixed/clock/fixed = PFCF
 ```
 
-Experiments live in `experiments/` (predictions stated in each header):
-`exp_stranding.py`, `exp_tpcluster.py`, `exp_nopen.py`, `exp_durations.py`,
-`exp_inventory.py`, `exp_oscillator_phase.py`, `exp_detrend_tail.py`,
-`exp_drift_decomp.py`, `exp_side_asymmetry.py`.
+To sweep all 16 knob combinations: `python scan_simulation_mvp.py`.
+To check the engine (12 invariants, ~30 s): `python validate_simulation_mvp.py`.
 
----
+## 4. The outputs
 
-## The engine switches (which model you are running)
+Every artifact carries the run's tag, e.g.
+`mvp_n2_s9_x0-100.0_cap-normal_close-normal_size-normal` (n, seed, x₀, and
+every non-default knob — default-knob runs stay short).
 
-`Config.summary()` prints the resolved set every run — **the header names your
-arm.** Full descriptions in `HANDOFF-master.md` §3. In brief:
+| file | content |
+|---|---|
+| `dashboard_<tag>.png` | the run at a glance: price, drift, per-side wealth and PnL, population |
+| `orderbook_<tag>.png` | book depth and volume per side over time + the deepest book snapshot |
+| `stylized_facts_<tag>.png` | return ACF, volatility clustering, kurtosis vs aggregation, on the tick tape |
+| `stylized_facts_event_<tag>.png` | the same measurements on the **event tape** (one price per print — the model's intrinsic clock) |
+| `scaling_laws_<tag>.png` | directional-change scaling laws (N(δ), overshoot ω(δ)) on the tick tape |
+| `scaling_laws_event_<tag>.png` | the same laws in event time |
+| `price_btc_eur_<tag>.csv` | the tick tape: `tick, price` |
+| `trades_<tag>.csv` | every print, **both parties**: `tick, trade_id, agent_id (taker), buy_sell, size, price, buy_agent, sell_agent, maker_id`. Per-agent analysis must select on `buy_agent`/`sell_agent` — the taker column alone sees only half an agent's fills |
+| `log_<tag>.txt` | the narrative log: one line per decision (init, order placed, trade with counterparty, stop hit, timer due, settle). Repetitive retry loops compress to one summary line. `print_log=False` turns it off — do so for large runs |
 
-- **`entry_mode`** — `"rest"` (**default**: pure CLOB, marketable-to-touch entries
-  that rest; needs impatience to stay alive) vs `"ioc"` (the batch hybrid: balanced
-  flow nets at the last price, only the imbalance walks the book).
-- **`hold_fires_close`** — impatience (default True; keeps the pure CLOB live).
-- **`close_mode`** — `"home"` (default, symmetric null) vs `"quantity"` (realistic;
-  stranding/squeezes — a *treatment*, don't delete it).
-- **`exit_promise`** — `"own_coin"` (**default**: each tribe delivers its own coin;
-  the symmetric exit the mirror equivariance was verified on) vs `"exact"` /
-  `"spend_long"` (treatments that *select* a price direction — see `HANDOFF-master.md`
-  §3/§4.9).
-- **`book_mode`** — `"coin"` (**default since 2026-07-23**: the verified symmetric
-  venue, every order denominated in the coin it delivers) vs `"btc"` (legacy
-  base-privileged book, retained as treatment).
-- **`mirror`** — the label-relabel involution used to *classify* residual leans, not
-  a sizing flag.
-- **`sl_mode`** — `"market"` / `"wait"` / `"limit"` (the stranding-fix arms).
-- **`stall_T`** — liveness detector for the CLOB absorbing states (detection, not
-  prevention).
-- **`x_accounting`**, **`log_thresholds`**, **`symmetric_solvency`** (all True):
-  the covariant-null defaults.
+Optional (`save_tapes=True`): `tape_<tag>.npy` (tick prices) and
+`tape_<tag>_events.npz` (every print's price and tick) — the raw arrays, so
+any analysis can be re-sliced later without re-running the simulation.
 
----
+## 5. The code
 
-## Gotchas — read before you trust a number
+**Root — the two scripts you run, plus the check:**
 
-- **The run header must match your intent.** A block that lies about what ran is
-  the worst bug class here (four silent-default incidents to date). Check
-  `cfg.summary()`.
-- **Read wealth/transfer in X, never EUR** — the EUR PnL panel is a moving ruler.
-  Use the **log gauge** (`dc_analysis` default) wherever the price spans e-folds.
-- **Never read EUR volume as activity** (use BTC volume / clearing counts).
-- **Compact-support / tails:** measure `P(|r|>k·sd)`, never kurtosis (it conflates
-  peakedness with tail weight).
-- **`⟨ω⟩(δ)` is not a power law** — never quote a fitted `E_os`.
-- **Compare distributions, never trajectories** — the model is chaotic. Most
-  numbers in the docs are 1–3 seeds: direction and order of magnitude only.
-- **Symmetry is a large-n claim** (at n=2 the "symmetric" engine gives 5:1).
-- **Regenerate stale feeds:** `export_price.py` writes only the columns the run
-  recorded; an old `price_feed.csv` can miss `open_long`/`open_short` and break the
-  phase analysis. `REUSE_CSV=True` re-analyses an old feed — delete it on a config
-  change.
-- Committed `*.json` / `*.jsonl` are **run artifacts**, not sources of truth.
+| file | role |
+|---|---|
+| `simulation_mvp.py` | **the model.** Config, order book, agents, the six-step tick loop, all writers. One file, every method commented |
+| `scan_simulation_mvp.py` | the sweep driver: all 16 knob combinations × seeds, one JSONL row per run (drift, lock, teeth, walls, stylized facts, scaling) |
+| `validate_simulation_mvp.py` | 12 numbered engine tests: determinism, the two frozen fingerprints, conservation, zero-sum, no self-trades, no degenerate quotes, book never crossed, solvency, ledger closure, CSV integrity, the decimal invariant. Exit 0 = healthy |
 
----
+**`helper/` — imported, not run directly:**
 
-## What's established (short version)
+| file | role |
+|---|---|
+| `dashboard_mvp.py` | the dashboard and order-book figures |
+| `stylized_facts_mvp.py` | ACF / clustering / kurtosis measurements and figure |
+| `scaling_law_mvp.py` | directional-change scaling analysis and figure |
+| `dc_analysis.py` | the DC event detector the scaling module builds on |
+| `plot_scan.py` | reads the scan JSONL; verdict tables and comparison figures |
+| `run_experiments_mvp.py` | replays the level-0 experiment ledger (exp1–exp6). Probes historical switches, so it runs on the **archived** engine in `dev/null_model/` |
+| `agent_pnl_mvp.py` | per-agent PnL ledgers from full two-sided fills (balance-sheet b/q accounting); validates to the engine's wallets and to Σp = 0 |
 
-- **Trading does not redistribute wealth**: ΔGini ≈ 0 over 20 seeds; symmetry fixes
-  the shares, conservation only the total.
-- **The engine is label-equivariant — the symmetric null was reached.** With the
-  coin-symmetric venue (`book_mode="coin"`) and own-coin exit promises, the
-  coin-relabel involution (`mirror=True`) inverts the price direction in **5/5 seed
-  pairs** (p = 1/32). So P(down) = P(up) *by demonstrated symmetry*, and the earlier
-  residual "down-lean" is reclassified as finite-sample noise from a symmetric
-  ensemble — not a bias. Verified by an explicit involution the dynamics commute
-  with, not by absence of evidence. *Scope:* equivariance is an **ensemble**
-  property; per-pair inversion holds in the lock regime (direction committed
-  early) — wanderer pairs chaotically decorrelate and can land same-signed
-  (measured: seed 9). corr with the mirror twin doubles as a free
-  lock-vs-wander classifier.
-- **The price level carries no information** — no anchor. On the **batch** arm it
-  wanders; on the **CLOB** arm (the default) it is directionally *unstable* — runs
-  away up or down, direction a free symmetric mode seeded by noise (a
-  symmetry-breaking instability, not a drift). "Prices always fall" was a two-seed
-  artifact.
-- **Direction is selectable, and selecting it forfeits the null.** `exit_promise`
-  arms tilt the price (`"exact"` → 5/5 up, +3.5); any chosen direction is by
-  definition a treatment, not the null.
-- **The book compresses the capital distribution** (filled ∝ requested^γ, γ from
-  ~0.1 thin to ~1 liquid) — the one result not put in by hand.
-- **The price's modal step is the TP band** (`sd(r)≈0.78·tp`, median|step|=tp on
-  both arms); but the ±2·tp *wall* (compact support) is **batch-only** — the CLOB
-  entry mechanism jumps past it (§5.4).
-- **The exit mix *is* the dynamics** (q ≈ 0.70 with stops, anti-persistent without:
-  SLs are momentum, TPs reversion).
-- **N(δ)~δ⁻² is arm-conditional: E_N ≈ −2 on batch n=150, but ≈ −1.6 on the CLOB
-  default** (the trending price over-counts large excursions). ⟨ω⟩=δ fails as a MEAN
-  (drift-inflated); the median overshoot ≈ BM. Fat tails: **absent on batch**
-  (P(|r|>4sd)=0), **present and genuine on the frozen CLOB default** — a power-law
-  tail with **Hill α ≈ 2**, shown against a zero-matched BM control and by survival
-  under aggregation (raw exceedance ratios are inflated by the 40–72% zero-step
-  fraction — use `exp_fat_tails.py`), and present at level 0.5 via a TP-roundness
-  hierarchy. Fat tails are reachable at level 0 — two routes.
-- **Volatility clustering splits in two**: magnitude clustering is present but
-  short-range (dead by lag ~5–20); the long memory (β ≈ 0.27, still 0.31 at lag 500)
-  is **activity** clustering — *when* trades happen, not how big they are. Measure
-  them separately with `exp_clustering.py`; ACF(|r|) over all steps mixes them.
-- **Four independent arguments say the missing piece is an actor, not a parameter**
-  — a two-sided quoter (Avellaneda–Stoikov) to provide a spread, absorb the close
-  channels, and stabilise the price direction. That is level 1. (Fat tails are *not*
-  one of the four — the mechanism gets them free.)
+## 6. Directory structure
 
-See `HANDOFF-master.md` §0 for the full scorecard and verdict (arm-conditional).
+```
+/                     the null model: two runnable scripts + the validator
+├── helper/           auxiliary modules (imported by the root scripts)
+├── eval/             simulation output
+│   ├── bench/        benchmark reference runs (n=2 and n=150)
+│   ├── runs/         exploration output
+│   └── validate/     under construction: spreadsheet-level analysis of
+│                     individual agent behavior
+└── dev/              legacy and research ARCHIVE — read, don't run
+    ├── explore/      initial R&D (the original engine, experiments, figures)
+    └── null_model/   the frozen predecessor of /, with its full history
+```
+
+## 7. A note on `dev/`
+
+The archive is the project's memory, and it is deliberately preserved: how
+this model was found, debugged, validated bit-for-bit against its legacy
+implementation, and experimentally mapped (six experiments, the bug hunts,
+the retractions) is documented in **`dev/explore/FINDINGS-master.md`** and
+**`dev/explore/HANDOFF-master.md`**, with the frozen predecessor's own record
+in **`dev/null_model/EVALUATION.md`**. The archive's longest story is the
+**symmetry chase**: run after run pinned in one direction, and the question
+was whether the engine secretly favors a side. The hunt went through a dual
+line-by-line audit of every side-conditional, a mirrored-capital test (both
+tribes handed the identical wealth multiset), and the exit-promise ablation
+(each side delivering its own coin — the mirror-equivariant rule — against
+the flow-symmetric alternative). Verdict: the code is an exact mirror; the
+**dice** decide the direction — the structure of the capital draw picks each
+run's winner before the first trade. Nothing in `dev/` is needed to use the
+model — but if you want to know *why* any line of the root engine is the way
+it is, the answer is in there.

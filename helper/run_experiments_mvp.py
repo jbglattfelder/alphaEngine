@@ -53,7 +53,11 @@ from plot_scan import load_rows, print_table
 HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(HERE)                      # repo root
 sys.path.insert(0, os.path.join(_ROOT, "helper"))
-sys.path.insert(0, _ROOT)   # scan_simulation_mvp + simulation_mvp live at root
+sys.path.insert(0, _ROOT)   # scan_simulation_mvp lives at root
+# The experiments replay the LEVEL-0 LEDGER: several probe switches (allow,
+# exact promise, libm, ...) that the shiny root engine no longer carries.
+# They therefore run on the ARCHIVED full-switch engine:
+sys.path.insert(0, os.path.join(_ROOT, "dev", "null_model"))
 OUT = os.path.join(_ROOT, "eval", "runs")   # all run outputs land here
 os.makedirs(OUT, exist_ok=True)
 
