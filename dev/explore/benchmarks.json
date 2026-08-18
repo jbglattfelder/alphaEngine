@@ -1,0 +1,72 @@
+{
+  "coin_book": {
+    "n_round_trips": 3893,
+    "p_final": "0.7473721358911494",
+    "stranded": 0,
+    "x_share": "0.4999382554114706"
+  },
+  "coin_book_mirror": {
+    "n_round_trips": 3938,
+    "p_final": "1.7534271255833807",
+    "stranded": 0,
+    "x_share": "0.5000308454086752"
+  },
+  "conv_mixed_evolve": {
+    "n_round_trips": 4257,
+    "p_final": "1.0219332712714344",
+    "stranded": 0,
+    "x_share": "0.5000073141404207"
+  },
+  "entry_rest_v5": {
+    "n_round_trips": 3944,
+    "p_final": "1.0354269743255065",
+    "stranded": 0,
+    "x_share": "0.4999213675065563"
+  },
+  "home_default_n150": {
+    "n_round_trips": 5623,
+    "p_final": "0.6659394731781304",
+    "stranded": 0,
+    "x_share": "0.5000055328500324"
+  },
+  "quantity_treatment": {
+    "n_round_trips": 5243,
+    "p_final": "1.137093690832632",
+    "stranded": 0,
+    "x_share": "0.5001278618030122"
+  },
+  "reference_row_f05_s1": {
+    "n_round_trips": 10572,
+    "p_final": "0.12563948785572523",
+    "stranded": 0,
+    "x_share": "0.5000626567736386"
+  },
+  "rest_impatience": {
+    "n_round_trips": 3944,
+    "p_final": "1.0354269743255065",
+    "stranded": 0,
+    "x_share": "0.4999213675065563"
+  },
+  "scale_invariance": {
+    "identical_2p4": true,
+    "identical_2pm6": true
+  },
+  "sl_limit_arm": {
+    "n_round_trips": 1068,
+    "p_final": "0.9763518117967109",
+    "stranded": 27,
+    "x_share": "0.4997789480017433"
+  },
+  "sl_wait_arm": {
+    "n_round_trips": 3005,
+    "p_final": "1.2943676322292528",
+    "stranded": 0,
+    "x_share": "0.5000678438198037"
+  },
+  "tp_hierarchy": {
+    "n_round_trips": 3383,
+    "p_final": "0.031",
+    "stranded": 1,
+    "x_share": "0.5000760540809208"
+  }
+}

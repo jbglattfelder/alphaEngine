@@ -1,0 +1,25 @@
+The four agents, the clocks, and the stop lines — the first 700 ticks, line by line.
+
+t=0 — setup. A closed market. One price: 100. Four agents, each starting with half its capital in euros and half in coins. L0 and L1 are configured to buy (long side); S0 and S1 to sell (short side). L0 has the most capital (308k) and therefore the slowest internal timer; L1 the least (192k) and the fastest — in this model, order size scales with wealth, and larger orders come less often. All four follow the same fixed rules: after opening a position, place an exit order 1% in the profitable direction (take-profit), and close by force if the price moves 1% the other way (stop) or if a holding timer expires. No agent has information, expectations, or strategy beyond this.
+
+t=54. L0's timer fires. It submits a buy order for 328 coins at 100. No sell orders exist yet, so the order rests in the book unfilled.
+
+t=144. S1's timer fires. It sells 303 coins, which match against L0's resting order. Trade #1 at 100. S1 now holds a short position of 303 coins; L0 a long position of the same size.
+
+t=145. Both set their exits: S1 posts a buy-back at 99.00 (its −1%), L0 a sell at 101.005 (its +1%). Then L1's timer fires. It buys at the best available price — which happens to be L0's take-profit order. Trade #2: 265 coins at 101.005. Note that this is one long-side agent buying from the other; the model does not prevent same-side agents from trading with each other. The price moves to 101.
+
+t=146 — the first cascade. The move to 101.005 is exactly S1's stop level (it sold at 100; +1% = 101.005, and touching the level counts as crossing it). S1's stop fires: it must buy back its full position immediately, at whatever prices the book offers. Its market order consumes L0's remaining 38 coins at 101, then 260 of the coins L1 posted at 102. The price rises to 102. S1's buy-back budget runs out 5.6 coins short of its full position; the shortfall is recorded and its timer resets. L0's position is now fully closed: it banks +305 euros. The sequence to note: one agent's routine take-profit set the price that triggered another agent's stop, and the stop moved the price further. Feedback, with no intent anywhere.
+
+t=160 to t=413 — an empty side. S0 enters, offering 322 coins at 102. No buyer appears. At t=369 L1's holding timer expires and it must sell its remaining 5.6 coins at market — but the book contains no buy orders at all. The order retries every tick (the log compresses 87 attempts into one summary line). With only four agents, one side of the book being completely empty for long stretches is normal.
+
+t=455. L0's slow timer finally fires again. It buys 325 coins at the best available price, consuming S0's entire offer and part of S1's. Trades #5–6 at 102.
+
+t=456. The shorts post their take-profit buy-backs at 101.005 — the first buy orders in 87 ticks. L1's stalled sell order fills against them on its 88th attempt (trades #7–8). L1 settles its round trip: +264 euros banked.
+
+t=457. Those prints at 101.005 sit exactly on L0's stop level (it bought at 102; −1% = 101.005). Its stop fires: sell all 325 coins at market. S0's resting buy-back absorbs 322 of them; S0 settles with 3.2 more coins than it started the cycle with. L0's final 2.4 coins find no remaining buyers — the bid side is empty again, and the retry loop resumes.
+
+t=648. After 191 attempts, L1 re-enters as a buyer and L0's residual finally sells. L0 settles: −330 euros on this round trip. It bought at 102 and was stopped out at 101 — the position lost exactly the distance between entry and stop, which is the loss its own rules define as acceptable. (That is what my previous "oldest loss in finance" phrase meant — buying, the price falling, and selling lower; the phrase was decoration and this states it plainly. "Da capo" was likewise just Italian for "from the beginning.")
+
+t=649 onward — repetition. L1 posts its new take-profit; S0 re-enters. The same cycle begins again with different participants in each role.
+
+Summary. Over 700 ticks, four agents with no information and identical fixed rules produced: a price rise driven by one agent buying another's exit order, a forced short-covering cascade, a 250-tick stretch where one side of the market did not exist, one agent profiting from involuntary patience, and another taking a stop-loss because its own earlier purchase had set up the trigger. The price path 100 → 101 → 102 → 101 was determined entirely by the coincidence of whose timer fired while whose orders were resting. Nothing else was needed.
