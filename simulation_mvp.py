@@ -61,13 +61,17 @@ import csv
 import itertools
 import math
 import os
+import sys
 from dataclasses import dataclass, field
 from decimal import Decimal, getcontext
-from typing import Optional
+from typing import Optional, Self, TextIO
 
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = HERE                      # repo root
+sys.path.insert(0, os.path.join(_ROOT, "helper"))
+OUT = HERE                                   # run outputs land next to the code
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -139,6 +143,10 @@ class Config:
                                     # short buys back EXACTLY the BTC it sold
                                     # — flow-symmetric; the ablation arm for
                                     # the down-pinning mechanism hunt)
+    save_csv: bool = True         # True: at run end, write price_btc_eur_<tag>
+                                  # .csv and trades_<tag>.csv next to the code.
+                                  # Sweeps pass False (n runs x millions of
+                                  # rows otherwise).
     save_tapes: bool = False      # True: at run end, write the raw tapes next
                                   # to this file — tape_<tag>.npy (tick
                                   # prices) and tape_<tag>_events.npz (every
@@ -253,7 +261,7 @@ class Order:
     BTC-equivalent view at the limit price, because the simulation's dust
     checks read it. Marketable orders use extreme limit prices
     (BUY at 1e18 / SELL at 1e-15 crosses everything)."""
-    agent_id: int
+    agent_id: str
     is_buy: bool
     price: float          # limit, EUR per BTC
     size: float           # BTC-equivalent view (back-annotated by the book)
@@ -283,8 +291,8 @@ class Trade:
     """One print: `size` BTC changed hands at `price` EUR/BTC."""
     price: float
     size: float           # BTC
-    buy_agent: int
-    sell_agent: int
+    buy_agent: str
+    sell_agent: str
 
 
 def _bid_sort_key(o: Order) -> tuple:
@@ -389,7 +397,7 @@ class Book:
         if o is not None:
             o.active = False
 
-    def purge_agent(self, agent_id: int) -> None:
+    def purge_agent(self, agent_id: str) -> None:
         """Remove every order of a (dead) agent from the book."""
         for o in self.bids + self.asks:
             if o.agent_id == agent_id:
@@ -534,10 +542,10 @@ class Agent:
     d: float              # pressure threshold: fires every d/c ticks
     tp_band: float        # this agent's take-profit band (log distance)
     sl_band: float        # this agent's stop-loss band  (log distance)
-    e_tp_up: float = None   # exp_mode="decimal": e^{+tp_band}, e^{-tp_band},
-    e_tp_dn: float = None   # e^{+sl_band}, e^{-sl_band}, precomputed once via
-    e_sl_up: float = None   # decimal at build time so the hot path never
-    e_sl_dn: float = None   # calls platform libm exp (cross-machine bits)
+    e_tp_up: Optional[float] = None   # exp_mode="decimal": e^{+tp_band}, e^{-tp_band},
+    e_tp_dn: Optional[float] = None   # e^{+sl_band}, e^{-sl_band}, precomputed once via
+    e_sl_up: Optional[float] = None   # decimal at build time so the hot path never
+    e_sl_dn: Optional[float] = None   # calls platform libm exp (cross-machine bits)
     q_i: float = 8.0      # this agent's order fraction: each open deploys
                           # wealth/q_i (block 2d; cfg.q for everyone on the
                           # "fixed" default arm)
@@ -600,7 +608,7 @@ class Agent:
         """The take-profit limit price: one band ABOVE entry for a long
         (sell higher), one band BELOW for a short (buy back lower)."""
         x_entry = self.avg_entry_price()
-        if self.e_tp_up is not None:              # decimal arm: no libm exp
+        if self.e_tp_up is not None and self.e_tp_dn is not None:              # decimal arm: no libm exp
             if self.is_long:
                 return x_entry * self.e_tp_up
             return x_entry * self.e_tp_dn
@@ -612,7 +620,7 @@ class Agent:
         """The stop trigger price: one band BELOW entry for a long,
         one band ABOVE for a short."""
         x_entry = self.avg_entry_price()
-        if self.e_sl_up is not None:              # decimal arm: no libm exp
+        if self.e_sl_up is not None and self.e_sl_dn is not None:              # decimal arm: no libm exp
             if self.is_long:
                 return x_entry * self.e_sl_dn
             return x_entry * self.e_sl_up
@@ -928,10 +936,10 @@ class Simulation:
         self._trades_this_tick: list[Trade] = []
 
         # print_log: the narrative log (one line per decision point)
-        self._logf = None
+        self._logf: Optional[TextIO] = None
         self._runs: dict[str, list] = {}   # retry-compression state (_plog)
         if cfg.print_log:
-            self._logf = open(os.path.join(HERE, f"log_{cfg_tag(cfg)}.txt"), "w")
+            self._logf = open(os.path.join(OUT, f"log_{cfg_tag(cfg)}.txt"), "w")
             self._plog(f"CONFIG {cfg_tag(cfg)} | n={cfg.n}/side, T={cfg.T:,}, "
                        f"seed={cfg.seed}, x_0={cfg.x_0}")
             for a in self.agents:
@@ -946,6 +954,8 @@ class Simulation:
         AGENT: the first attempt is logged, repeats are counted across any
         interleaved lines, and one summary is written when the run resolves
         (the agent's close fills, or it does something else)."""
+        if self._logf is None:
+            return
         if self._logf is None:
             return
         parts = msg.split(" ", 1)
@@ -971,6 +981,8 @@ class Simulation:
             return
         empty = "bid side was empty" if " sell " in f" {body} " else "ask side was empty"
         outcome = "close filled" if filled else "close attempt moved on"
+        if self._logf is None:
+            return
         self._logf.write(f"t={self.t} {agent} {outcome} after {n} retries "
                          f"({empty})\n")
 
@@ -1048,6 +1060,7 @@ class Simulation:
         (done when pos_b is dust); a short re-spends the entry EUR it
         received (done when pos_q is dust). This own-coin promise is the
         exit rule the mirror equivariance was verified on."""
+        assert self.cfg.x_min is not None
         if not a.is_long and self.cfg.exit_promise == "own_coin":
             return a.pos_q > 1e-9 * self.cfg.x_min       # EUR still to spend
         return abs(a.pos_b) > 1e-9 / self.cfg.x_0        # BTC still to deliver
@@ -1353,6 +1366,7 @@ class Simulation:
         (the eur_budget is the true terminator; the 4x size just gives
         headroom for cheap asks). Long: sell all held position BTC into the
         bids. A residual simply tries again next tick."""
+        assert self.cfg.x_min is not None
         if self.cfg.close_cancels_rest:
             self._purge_agent_orders(a.id)
         if not self._close_undelivered(a):
@@ -1420,6 +1434,7 @@ class Simulation:
         valuation kills only genuine insolvency, not a transient mark."""
         x0 = self.cfg.x_0
         for a in self.alive():
+            assert self.cfg.epsilon is not None
             bank_val = a.eur + a.btc * x0
             if bank_val <= self.cfg.epsilon:
                 a.alive = False
@@ -1520,7 +1535,7 @@ class Simulation:
             return False
         return True
 
-    def run(self) -> "Simulation":
+    def run(self) -> Self:
         """Run the full horizon."""
         for t in range(1, self.cfg.T + 1):
             keep_going = self.step(t)
@@ -1528,8 +1543,11 @@ class Simulation:
                 break
         if self.stopped_reason is None:
             self.stopped_reason = "reached T"
+        if self.cfg.save_csv:
+            self.write_price_csv()
+            self.write_trades_csv()
         if self.cfg.save_tapes:
-            base = os.path.join(HERE, f"tape_{cfg_tag(self.cfg)}")
+            base = os.path.join(OUT, f"tape_{cfg_tag(self.cfg)}")
             np.save(base + ".npy", np.asarray(self.rec_price))
             np.savez_compressed(base + "_events.npz",
                                 p=np.asarray([r[5] for r in self.trades_log]),
@@ -1570,7 +1588,7 @@ class Simulation:
         (base BTC, quote EUR — the value is EUR per BTC, same number the
         engine trades at)."""
         if path is None:
-            path = f"price_btc_eur_{cfg_tag(self.cfg)}.csv"
+            path = os.path.join(OUT, f"price_btc_eur_{cfg_tag(self.cfg)}.csv")
         with open(path, "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["tick", "BTC/EUR"])
@@ -1587,7 +1605,7 @@ class Simulation:
         the appended columns — filtering on agent_id alone sees only the
         taker half of an agent's fills (~50% of its volume)."""
         if path is None:
-            path = f"trades_{cfg_tag(self.cfg)}.csv"
+            path = os.path.join(OUT, f"trades_{cfg_tag(self.cfg)}.csv")
         with open(path, "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["tick", "trade_id", "agent_id", "buy_sell", "size",
@@ -1625,8 +1643,8 @@ if __name__ == "__main__":
     print(sim.summary())
     tag = cfg_tag(cfg)
     print("wrote:",
-          sim.write_price_csv(os.path.join(HERE, f"price_btc_eur_{tag}.csv")),
-          sim.write_trades_csv(os.path.join(HERE, f"trades_{tag}.csv")))
+          sim.write_price_csv(os.path.join(OUT, f"price_btc_eur_{tag}.csv")),
+          sim.write_trades_csv(os.path.join(OUT, f"trades_{tag}.csv")))
 
     elapsed = time.time() - t
     print(f"elapsed time: {elapsed:.2f} s")
@@ -1634,12 +1652,12 @@ if __name__ == "__main__":
     from dashboard_mvp import plot_dashboard, plot_orderbook
     from scaling_law_mvp import plot_scaling_laws
     from stylized_facts_mvp import plot_stylized_facts
-    dash_png = os.path.join(HERE, f"dashboard_{tag}.png")
-    book_png = os.path.join(HERE, f"orderbook_{tag}.png")
-    laws_png = os.path.join(HERE, f"scaling_laws_{tag}.png")
-    facts_png = os.path.join(HERE, f"stylized_facts_{tag}.png")
-    laws_ev_png = os.path.join(HERE, f"scaling_laws_event_{tag}.png")
-    facts_ev_png = os.path.join(HERE, f"stylized_facts_event_{tag}.png")
+    dash_png = os.path.join(OUT, f"dashboard_{tag}.png")
+    book_png = os.path.join(OUT, f"orderbook_{tag}.png")
+    laws_png = os.path.join(OUT, f"scaling_laws_{tag}.png")
+    facts_png = os.path.join(OUT, f"stylized_facts_{tag}.png")
+    laws_ev_png = os.path.join(OUT, f"scaling_laws_event_{tag}.png")
+    facts_ev_png = os.path.join(OUT, f"stylized_facts_event_{tag}.png")
     plot_dashboard(sim, save_path=dash_png, show=SHOW)
     plot_orderbook(sim, save_path=book_png, show=SHOW)
     plot_scaling_laws(sim, save_path=laws_png, show=SHOW)

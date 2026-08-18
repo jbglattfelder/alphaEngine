@@ -1,0 +1,14 @@
+{
+    "extraPaths": [
+        "helper"
+    ],
+    "typeCheckingMode": "basic",
+    "exclude": [
+        "dev",
+        "eval",
+        "__pycache__",
+        "NULL",
+        ".venv",
+        "**/node_modules"
+    ]
+}

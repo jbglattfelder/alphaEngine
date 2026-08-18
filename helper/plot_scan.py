@@ -1,5 +1,5 @@
 """
-scan_plots_mvp.py — figures for the block parameter scan (scan_mvp.py).
+scan_plots_mvp.py — figures for the block parameter scan (scan_simulation_mvp.py).
 
 Reads scan_results.jsonl and writes two figures:
 
@@ -24,11 +24,18 @@ from __future__ import annotations
 import itertools
 import json
 import os
+import sys
+
+from typing import Optional
 
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-IN = os.path.join(HERE, "scan_results.jsonl")
+_ROOT = os.path.dirname(HERE)                      # repo root
+sys.path.insert(0, os.path.join(_ROOT, "helper"))
+OUT = os.path.join(_ROOT, "eval", "runs")   # all run outputs land here
+os.makedirs(OUT, exist_ok=True)
+IN = os.path.join(OUT, "scan_results.jsonl")
 
 LEGACY_NULL = "PFCF"
 CURRENT_DEFAULT = "NFNF"
@@ -79,7 +86,7 @@ ARM_ORDER = _all_codes()
 SEED_COLORS = ["#2563EB", "#C2680A", "#15803D", "#7C3AED", "#DB2777", "#0891B2"]
 
 
-def load_rows(path: str = None) -> list[dict]:
+def load_rows(path: Optional[str] = None) -> list[dict]:
     """Read every finished run; normalise older three-letter arm codes
     (pre-size scans) to four letters with size='fixed'."""
     if path is None:
@@ -485,8 +492,8 @@ if __name__ == "__main__":
     print(f"{len(rows)} runs loaded, arms present: "
           f"{sorted({r['arm'] for r in rows}, key=_order_key)}")
     print_table(rows)
-    plot_prices(rows, os.path.join(HERE, f"scan_prices_{tag}.png"))
-    plot_stats(rows, os.path.join(HERE, f"scan_stats_{tag}.png"))
-    plot_wall(rows, os.path.join(HERE, f"scan_wall_{tag}.png"))
-    plot_wall(rows, os.path.join(HERE, f"scan_wall_value_{tag}.png"),
+    plot_prices(rows, os.path.join(OUT, f"scan_prices_{tag}.png"))
+    plot_stats(rows, os.path.join(OUT, f"scan_stats_{tag}.png"))
+    plot_wall(rows, os.path.join(OUT, f"scan_wall_{tag}.png"))
+    plot_wall(rows, os.path.join(OUT, f"scan_wall_value_{tag}.png"),
               value_weighted=True)

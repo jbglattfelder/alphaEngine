@@ -23,11 +23,17 @@ from __future__ import annotations
 import itertools
 import json
 import os
+import sys
 import time
 
 import numpy as np
 
 import numpy as _np
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "helper"))
+OUT = os.path.join(HERE, "eval", "runs")
+os.makedirs(OUT, exist_ok=True)
 
 from simulation_mvp import Config, Simulation
 from stylized_facts_mvp import compute_facts
@@ -40,7 +46,7 @@ class ScanSimulation(Simulation):
 
     def __init__(self, cfg, run_checks=True):
         try:
-            super().__init__(cfg, run_checks=run_checks)
+            super().__init__(cfg, run_checks=run_checks)  # type: ignore[call-arg]
         except TypeError:      # engine without the toggle: always-checked
             super().__init__(cfg)
         self.rec_eur_long = []
@@ -159,10 +165,10 @@ def tooth_stats(prices, x_0, t_lock, delta=0.5):
     n_teeth = max(0, (len(piv) - 1) // 2)
     if len(piv) < 3:
         return n_teeth, float("nan"), float("nan")
-    gaps = _np.diff(_np.asarray(piv))
-    return n_teeth, float(2.0 * _np.mean(gaps)), float(_np.mean(swings))
+    gaps = _np.diff(_np.asarray(piv, dtype=float))
+    return (n_teeth, float(2.0 * _np.mean(gaps)),
+            float(_np.mean(_np.asarray(swings, dtype=float))))
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ---------------- edit these ----------------
 N = 400
@@ -177,7 +183,7 @@ BAND_SEEDS = (None,)   # corner-3 sweeps: e.g. (None, 1, 2, 3, 4, 5, 6, 7)
                        # redraws ONLY the band luck per run (band_dist="normal"
                        # arms; None = the global seed). Fixed-band arms ignore
                        # it — leave (None,) unless sweeping.
-OUT = os.path.join(HERE, "scan_results.jsonl")
+RESULTS = os.path.join(OUT, "scan_results.jsonl")
 # --------------------------------------------
 
 ARMS = list(itertools.product(("pareto", "normal"),
@@ -205,6 +211,7 @@ def run_one(cap: str, band: str, close: str, size: str, seed: int,
     cfg = Config(n=N, T=T, seed=seed, capital_dist=cap,
                  band_dist=band, closing=close, size_dist=size,
                  band_seed=band_seed, capital_mirror=CAPITAL_MIRROR,
+                 save_csv=False,
                  run_checks=False,print_log=False, **cfg_kwargs)
     t0 = time.time()
     sim = ScanSimulation(cfg, run_checks=False).run()
@@ -276,7 +283,7 @@ def main() -> None:
     print(f"scan: {len(ARMS)} arms x {len(BAND_SEEDS)} band seeds x "
           f"{len(SEEDS)} seeds = {len(todo)} runs at n={N}, T={T:,}")
     t0 = time.time()
-    with open(OUT, "w") as f:
+    with open(RESULTS, "w") as f:
         for i, (cap, band, close, size, seed, bs) in enumerate(todo, 1):
             row = run_one(cap, band, close, size, seed, band_seed=bs)
             f.write(json.dumps(row) + "\n")
@@ -290,7 +297,7 @@ def main() -> None:
                   f"{row['secs']:5.1f}s  ln_drift={row['ln_drift']:+.3f}  "
                   f"kurt={row['kurt_m1']:8.1f}  {lock_txt}  "
                   f"(eta {eta/60:.0f} min)")
-    print(f"done in {(time.time() - t0)/60:.1f} min -> {OUT}")
+    print(f"done in {(time.time() - t0)/60:.1f} min -> {RESULTS}")
 
 
 if __name__ == "__main__":

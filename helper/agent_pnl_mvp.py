@@ -26,6 +26,15 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+import os
+import sys
+HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+sys.path.insert(0, _ROOT)                      # simulation_mvp lives at root
+OUT = os.path.join(_ROOT, "eval", "runs")
+os.makedirs(OUT, exist_ok=True)
+
 from simulation_mvp import Config, Simulation, build_agents
 
 # ---------------- edit these ----------------
@@ -39,7 +48,7 @@ class FillSim(Simulation):
 
     def __init__(self, cfg, run_checks=True):
         try:
-            super().__init__(cfg, run_checks=run_checks)
+            super().__init__(cfg, run_checks=run_checks)  # type: ignore[call-arg]
         except TypeError:      # engine without the toggle: always-checked
             super().__init__(cfg)
         self.fills = []   # (tick, buy_agent, sell_agent, size, price, taker)
@@ -91,7 +100,7 @@ def main() -> None:
         dQ = (init[aid]["Q"] + L["q"].iloc[-1]) - final[aid].eur
         assert abs(dB) < 1e-6 and abs(dQ) < 1e-4, (aid, dB, dQ)
         tot += L["p_q"].iloc[-1]
-        L.to_csv(f"ledger_{aid}.csv", index=False)
+        L.to_csv(os.path.join(OUT, f"ledger_{aid}.csv"), index=False)
         print(f"{aid}: {len(L)} fills, final p^q = {L['p_q'].iloc[-1]:+12.2f} "
               f"({100 * L['perf'].iloc[-1]:+.3f}%)  [wallet check OK]")
     assert abs(tot) < 1e-4, tot
@@ -134,7 +143,7 @@ def main() -> None:
     axes[2].legend(fontsize=8, frameon=False)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     from simulation_mvp import cfg_tag
-    out = f"agent_pnl_{cfg_tag(CFG)}.png"
+    out = os.path.join(OUT, f"agent_pnl_{cfg_tag(CFG)}.png")
     fig.savefig(out, dpi=130, bbox_inches="tight")
     print("wrote", out)
 

@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import os
 
+from typing import Optional
+
 import numpy as np
 
 LAGS_R = [1, 2, 3, 5, 10, 20]              # linear-ACF probe lags   (SF1)
@@ -57,7 +59,7 @@ def compute_facts(prices: np.ndarray) -> dict:
     prices = np.asarray(prices, float)
     prices = prices[np.isfinite(prices) & (prices > 0)]
     r = np.diff(np.log(prices))
-    out = {"n_ticks": len(prices)}
+    out: dict = {"n_ticks": len(prices)}
     out["zero_frac"] = float((r == 0).mean())          # SF5
     out["sd"] = float(r.std())
     out["acf_r"] = acf(r, LAGS_R)                      # SF1
@@ -86,7 +88,7 @@ def report_facts(F: dict, tag: str) -> None:
           f"{k[25]:.1f} -> {k[125]:.1f}   [fact: falls under aggregation]")
 
 
-def plot_stylized_facts(sim, save_path: str = None, show: bool = False,
+def plot_stylized_facts(sim, save_path: Optional[str] = None, show: bool = False,
                         time_base: str = "tick") -> str:
     """The run-block entry point (mirrors plot_dashboard's shape): measure
     the five facts on the finished simulation's price series, print the

@@ -40,31 +40,39 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 
 import numpy as np
 
-import scan_mvp as S
-from scan_plots_mvp import load_rows, print_table
+from typing import Any
+
+import scan_simulation_mvp as S
+from plot_scan import load_rows, print_table
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(HERE)                      # repo root
+sys.path.insert(0, os.path.join(_ROOT, "helper"))
+sys.path.insert(0, _ROOT)   # scan_simulation_mvp + simulation_mvp live at root
+OUT = os.path.join(_ROOT, "eval", "runs")   # all run outputs land here
+os.makedirs(OUT, exist_ok=True)
 
 # ---------------- edit these ----------------
 RUN = ("exp4_tooth",)   # the fat tooth run, clean arm — the last open experiment   # recommended next: the fat tooth run with the DC
                         # detector (exp1/2/3/5 verdicts are in EVALUATION.md)
 
-EXP1 = dict(N=400, T=30_000, SEEDS=(9, 17, 23, 42))       # the A/B
-EXP2 = dict(N=500, T=100_000, SEEDS=(9,),                 # the band sweep
+EXP1: dict[str, Any] = dict(N=400, T=30_000, SEEDS=(9, 17, 23, 42))       # the A/B
+EXP2: dict[str, Any] = dict(N=500, T=100_000, SEEDS=(9,),                 # the band sweep
             BAND_SEEDS=(None, 1, 2, 3, 4, 5, 6, 7))
-EXP3 = dict(N=400, T=30_000, SEEDS=(9, 17),               # the bite sweep
+EXP3: dict[str, Any] = dict(N=400, T=30_000, SEEDS=(9, 17),               # the bite sweep
             SIZE_CVS=(0.1, 0.2, 0.3, 0.5))
-EXP4 = dict(N=400, T=150_000, SEEDS=(9, 17, 23, 42),          # the tooth clock
+EXP4: dict[str, Any] = dict(N=400, T=150_000, SEEDS=(9, 17, 23, 42),          # the tooth clock
             C_VALUES=(0.002, 0.004, 0.008),   # vary c at q=8; 0.004 = the
                                               # saturation midpoint
             Q_VALUES=(16,))                   # q=4 needs T~250k to grow teeth
                                               # — run it as a separate job
-EXP6 = dict(N=150, T=10_000, SEEDS=(9, 17, 23, 42))
-EXP5 = dict(N=500, T=60_000, SEEDS=(9,),                  # the promise ablation
+EXP6: dict[str, Any] = dict(N=150, T=10_000, SEEDS=(9, 17, 23, 42))
+EXP5: dict[str, Any] = dict(N=500, T=60_000, SEEDS=(9,),                  # the promise ablation
             BAND_SEEDS=(None, 1, 2, 3),
             PROMISES=("own_coin", "exact"))
 # --------------------------------------------
@@ -74,7 +82,7 @@ SECS_PER_UNIT = 60.0 / (400 * 30_000)   # measured: ~60 s at n=400, T=30k
 
 def _open_out(name: str, n: int, T: int):
     """One JSONL per experiment, parameter-named — never overwrites another."""
-    path = os.path.join(HERE, f"results_{name}_n{n}_T{T}.jsonl")
+    path = os.path.join(OUT, f"results_{name}_n{n}_T{T}.jsonl")
     return path, open(path, "w")
 
 
@@ -228,7 +236,7 @@ def exp6_cleanmarket() -> None:
     class Probe(Simulation):
         def __init__(self, cfg, run_checks=True):
             try:
-                super().__init__(cfg, run_checks=run_checks)
+                super().__init__(cfg, run_checks=run_checks)  # type: ignore[call-arg]
             except TypeError:      # engine without the toggle: always-checked
                 super().__init__(cfg)
             self.depth_samples = []
@@ -253,16 +261,16 @@ def exp6_cleanmarket() -> None:
     # every arm pins ALL THREE switches explicitly, plus print_log off —
     # immune to whatever the engine's Config defaults happen to be (the
     # all-arms-identical incident: flipped defaults made "legacy" clean)
-    def _arm(sm, ccr, nxg):
+    def _arm(sm: str, ccr: bool, nxg: bool) -> dict[str, Any]:
         return dict(self_match=sm, close_cancels_rest=ccr,
-                    neg_xbar_guard=nxg, print_log=False)
+                    neg_xbar_guard=nxg, print_log=False, save_csv=False)
     ARMS = [("legacy", _arm("allow", False, False)),
             ("stp",    _arm("skip",  False, False)),
             ("ccr",    _arm("allow", True,  False)),
             ("nxg",    _arm("allow", False, True)),
             ("clean",  _arm("skip",  True,  True))]
     p = EXP6
-    path = os.path.join(HERE, f"results_exp6_cleanmarket_n{p['N']}_T{p['T']}.jsonl")
+    path = os.path.join(OUT, f"results_exp6_cleanmarket_n{p['N']}_T{p['T']}.jsonl")
     print(f"\n=== exp6_cleanmarket: {len(ARMS) * len(p['SEEDS'])} runs at "
           f"n={p['N']}, T={p['T']:,} -> {os.path.basename(path)}")
     t0 = time.time()

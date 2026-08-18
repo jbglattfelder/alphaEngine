@@ -30,6 +30,8 @@ from __future__ import annotations
 
 import os
 
+from typing import Optional
+
 import numpy as np
 
 from dc_analysis import measure, fit
@@ -167,8 +169,8 @@ def event_prices(sim) -> np.ndarray:
     return np.asarray(prices, float)
 
 
-def plot_scaling_laws(sim, save_path: str = None, show: bool = False,
-                      time_base: str = "tick") -> str:
+def plot_scaling_laws(sim, save_path: Optional[str] = None, show: bool = False,
+                      time_base: str = "tick") -> Optional[str]:
     """The run-block entry point (mirrors plot_dashboard's shape): analyse
     the finished simulation's price series, print the report, save the
     two-law figure, and pop it when show=True.
