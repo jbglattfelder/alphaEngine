@@ -1478,7 +1478,7 @@ if __name__ == "__main__":
     t = time.time()
 
     # ---------------- edit these to override defaults ----------------
-    N = 150          # agents per side
+    N = 2          # agents per side
     T = 150_000      # ticks
     SEED = 9
     CAPITAL_DIST = "normal"   # block 2a: "pareto" | "normal"

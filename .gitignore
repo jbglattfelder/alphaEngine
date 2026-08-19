@@ -9,6 +9,5 @@ tmp/
 *.patch
 *.npz
 *.sh
-*.xls
 *.npy
 *.jsonl
