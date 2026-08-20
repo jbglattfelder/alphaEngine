@@ -115,3 +115,58 @@ Honest differences:
 The punchline of the whole model: **agents with zero intelligence produce
 all of the above.** None of these features, observed in a real market, is
 by itself evidence of information, strategy, or skill.
+
+---
+
+# EVAUATION of scan results
+
+## 1. What each knob does (the 16-combination scan)
+
+All 16 knob combinations, 8 seeds each, n=500, 150,000 ticks — 128 runs.
+The four knobs are not equally important. In easy terms:
+
+**The exit-band knob (`band_dist`) is the master dial.** It sets the
+market's texture:
+
+- *Everyone the same bands* ("fixed"): all exit orders sit exactly ±1%
+  away, so the book is a sparse ladder with 1%-wide gaps — every trade
+  jumps a big step. Per-tick volatility ≈ 0.0145 (the band scale itself).
+- *Everyone their own bands* ("normal"): exit orders smear over a whole
+  range of prices, the book becomes dense, and the price creeps through
+  it in tiny steps. Per-tick volatility ≈ 0.0006 — **about 25× quieter**
+  — yet these markets lock into the sawtooth far MORE often (95% vs 64%
+  of runs), travel further (mean |drift| 4.0 vs 2.9), and show stronger
+  volatility clustering (0.55 vs 0.30). Quiet, but more extreme.
+- The band knob even changes the scaling law: fixed-band markets count
+  directional changes like random walks (E_N ≈ −2.1); own-band markets
+  are tooth-dominated and count them almost flat (E_N ≈ −0.8) — a third
+  regime, belonging to the locked sawtooth.
+
+**The money knob (`capital_dist`) is the second dial.** Whale wealth
+("pareto") makes markets lock more often (94% vs 66%) and overshoot
+harder (⟨ω⟩/δ ≈ 3.1 vs 1.5) than equal-ish wealth ("normal"). Born
+whales accelerate what made whales achieve anyway — concentration is
+concentration, however it arrives.
+
+**The timer knob (`closing`) and the size knob (`size_dist`) barely
+matter.** Their averages are near-identical across the board (lock 77%
+vs 83%, same volatility, same scaling exponents). One careful caveat:
+these knobs add RANDOM variation — timing and size jitter drawn once,
+blind to the market. Timing and size that RESPOND to the market
+(entering on a move, sizing to conditions) are feedback, not
+heterogeneity, and are untested here — that is precisely what the
+intrinsic-time clock (block 2e) and level 1 will add. What this scan
+establishes is the control: since blind jitter changes nothing
+systematic, any effect those additions produce will be attributable to
+the feedback itself.
+
+**And in every one of the 128 runs, direction stayed a coin flip.**
+Locking arms split up and down across seeds with no lean anywhere —
+the knobs set how violently a market locks, never which way.
+
+**Rule of thumb:** heterogeneity of *wealth* or of *exit rules* drives
+locking and extremes; blind randomness in *timing* and *size* is
+decoration — market-responsive timing and sizing belong to the next
+level of the model. And since real markets certainly have heterogeneous
+wealth and heterogeneous exit rules, the null's message is that their
+locking tendencies need no further explanation.

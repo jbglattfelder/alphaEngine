@@ -1,21 +1,44 @@
 """
-scan_mvp.py — parameter scan over the three interchangeable blocks.
+scan_simulation_mvp.py — parameter scans of the null model.
 
-Full 2^4 factorial over
-    CAPITAL_DIST in {pareto, normal}
-    BAND_DIST    in {fixed,  normal}
-    CLOSING      in {clock,  normal}
-    SIZE_DIST    in {fixed,  normal}
-times SEEDS, at fixed (N, T). One JSON line per finished run is appended to
-scan_results.jsonl immediately, so partial progress survives interruption.
+One scan = many runs at fixed (N, T) x SEEDS, one JSON line per finished
+run appended immediately to its results file in eval/runs/ (partial
+progress survives interruption). The SCAN selector below chooses the
+family:
 
-Arm code: four letters, one per block:
-    1st  P/N = capital Pareto / Normal
-    2nd  F/N = bands   Fixed  / Normal
-    3rd  C/N = closing Clock  / Normal
-    4th  F/N = size    Fixed  / Normal   (per-agent q_i)
-e.g. "PFCF" = the legacy null, "NFNF" = the current default,
-"NFNN" = current default + heterogeneous bite sizes, "NNNN" = all switched.
+  "blocks"  The classic 2^4 factorial over the four knobs
+                capital_dist in {pareto, normal}
+                band_dist    in {fixed,  normal}
+                closing      in {clock,  normal}
+                size_dist    in {fixed,  normal}
+            Arm code = four letters in that order, P/N, F/N, C/N, F/N:
+            "PFCF" = the frozen default, "NFNN" = the demo world of the
+            __main__ run block, "NNNN" = everything heterogeneous.
+            -> scan_results.jsonl
+
+  "bands"   NFNN with asymmetric exit bands: two (tp, sl) pairs each for
+            sl > tp, sl = tp, and tp > sl. Does the tilt of the exit
+            rules tilt the market?           -> scan_results_bands.jsonl
+
+  "peaky"   Each knob's "normal" arm run at cv = 0.3 and at cv = 0.01
+            (a spike: the distribution degenerates to its mean), against
+            the PFCF reference. For bands / closing / size the peaky arm
+            should statistically reproduce the fixed / clock sibling —
+            a continuity check of the block design. Capital has no
+            sibling: its peaky arm is the all-agents-equal world (near-
+            identical wallets, hence near-identical clocks). Values
+            converge to the configuration defaults: capital_dist -> K/(2n),
+            band_dist -> 0.01, closing -> d_i/c, size_dist -> 8
+                                             -> scan_results_peaky.jsonl
+
+  "qsweep"  NFNN with the order fraction q in {2, 4, 8, 16, 32}: from
+            half-the-wealth bites to slivers. -> scan_results_qsweep.jsonl
+
+Every row carries the standard measurements (drift, lock time, tooth
+census, wall witnesses, stylized facts, DC scaling); family rows add
+"label" and the varied parameters as "x_<name>" fields. Non-blocks scans
+print a per-label verdict table at the end. plot_scan.py reads the
+blocks results; family results are small enough to read from the table.
 """
 
 from __future__ import annotations
@@ -28,11 +51,9 @@ import time
 
 import numpy as np
 
-import numpy as _np
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "helper"))
-OUT = os.path.join(HERE, "eval", "runs")
+OUT = os.path.join(HERE, "eval", "scans")
 os.makedirs(OUT, exist_ok=True)
 
 from simulation_mvp import Config, Simulation
@@ -78,8 +99,8 @@ def lock_time(prices, x_0, wall=2.5):
     """When did the run get stuck? The lock time is the first tick after
     which |ln(p/x_0)| NEVER returns inside the wall threshold. Returns
     (t_lock, locked): t_lock = T for a run that never locks."""
-    lnp = _np.abs(_np.log(_np.asarray(prices) / x_0))
-    inside = _np.nonzero(lnp <= wall)[0]
+    lnp = np.abs(np.log(np.asarray(prices) / x_0))
+    inside = np.nonzero(lnp <= wall)[0]
     if len(inside) == 0:
         return 0, True                      # locked from the start
     t_lock = int(inside[-1]) + 1
@@ -99,16 +120,16 @@ def wall_metrics(prices, x_0, t_lock, eur_long, btc_short, wall=2.5):
     n_reentries  : how often the path came BACK inside the wall band after
                    first leaving it — 0 means the wall absorbed on first
                    contact; large values mean the wall is metastable."""
-    lnp = _np.log(_np.asarray(prices) / x_0)
-    outside = _np.abs(lnp) > wall
+    lnp = np.log(np.asarray(prices) / x_0)
+    outside = np.abs(lnp) > wall
     if t_lock >= len(lnp) or not outside.any():
         return 0, float("nan"), 0
-    side = 1 if float(_np.mean(lnp[t_lock:])) > 0 else -1
+    side = 1 if float(np.mean(lnp[t_lock:])) > 0 else -1
     if side > 0:
         ammo = eur_long[t_lock - 1] / eur_long[0] if eur_long[0] else float("nan")
     else:
         ammo = btc_short[t_lock - 1] / btc_short[0] if btc_short[0] else float("nan")
-    first_out = int(_np.argmax(outside))
+    first_out = int(np.argmax(outside))
     later = outside[first_out:]
     reentries = 0
     for i in range(1, len(later)):
@@ -158,31 +179,69 @@ def tooth_stats(prices, x_0, t_lock, delta=0.5):
     pivots). Returns (n_teeth, mean tooth period in ticks, mean swing).
     Replaces the old one-tick snap counter, which missed cascades spread
     over several ticks (exp4: 3/15 measurable)."""
-    lnp = _np.log(_np.asarray(prices)[t_lock:] / x_0)
+    lnp = np.log(np.asarray(prices)[t_lock:] / x_0)
     if len(lnp) < 2:
         return 0, float("nan"), float("nan")
     piv, swings = zigzag(lnp, delta)
     n_teeth = max(0, (len(piv) - 1) // 2)
     if len(piv) < 3:
         return n_teeth, float("nan"), float("nan")
-    gaps = _np.diff(_np.asarray(piv, dtype=float))
-    return (n_teeth, float(2.0 * _np.mean(gaps)),
-            float(_np.mean(_np.asarray(swings, dtype=float))))
+    gaps = np.diff(np.asarray(piv, dtype=float))
+    return (n_teeth, float(2.0 * np.mean(gaps)),
+            float(np.mean(np.asarray(swings, dtype=float))))
 
 
 # ---------------- edit these ----------------
-N = 400
-T = 30_000
-SEEDS = (9, 17, 23, 42)
+# ── scan settings (shared by every family) ──────────────────────────────────
+N = 500
+T = 50_000
+SEEDS = (9, 17, 42, 201, 202)
                         # wealth multiset (capital_mirror) — dice 1 neutralized,
                         # direction becomes fair-coin across seeds. False: the
                         # realistic null (independent deals; direction is
                         # deal-determined in Pareto arms). Rows/tags record it.
-BAND_SEEDS = (None,)   # corner-3 sweeps: e.g. (None, 1, 2, 3, 4, 5, 6, 7)
-                       # redraws ONLY the band luck per run (band_dist="normal"
-                       # arms; None = the global seed). Fixed-band arms ignore
-                       # it — leave (None,) unless sweeping.
-RESULTS = os.path.join(OUT, "scan_results.jsonl")
+BAND_SEEDS = (None,)   # extra runs per arm that re-roll ONLY the per-agent
+                       # band draw (band_dist="normal" arms; None = the global
+                       # seed). Isolates "band luck" from the capital/clock/
+                       # size draws. Fixed-band arms ignore it — leave (None,)
+                       # unless sweeping, e.g. (None, 1, 2, 3).
+# ── which scan family to run ─────────────────────────────────────────────────
+SCAN = "peaky"   # "blocks" — all 16 knob combinations (the classic scan)
+                  # "bands"  — NFNN with asymmetric exit bands: sl>tp, sl=tp, tp>sl
+                  # "peaky"  — each knob's "normal" arm with cv -> 0.01: the
+                  #            degenerate N should reproduce its fixed/clock
+                  #            sibling. (Capital has no fixed sibling: its
+                  #            peaky-N is the all-agents-equal world.)
+                  # "qsweep" — NFNN with the order fraction q varied
+
+RESULTS = os.path.join(OUT, "scan_results.jsonl" if SCAN == "blocks"
+                       else f"scan_results_{SCAN}.jsonl")
+
+# the non-blocks families: (label, four knobs, extra Config kwargs)
+NFNN = ("normal", "fixed", "normal", "normal")
+PFCF = ("pareto", "fixed", "clock", "fixed")
+FAMILIES: dict = {
+    "bands": [
+        (f"tp{tp:g}_sl{sl:g}", NFNN, dict(tp=tp, sl=sl))
+        for tp, sl in ((0.005, 0.010), (0.010, 0.020),      # sl > tp
+                       (0.010, 0.010), (0.020, 0.020),      # sl = tp
+                       (0.010, 0.005), (0.020, 0.010))      # tp > sl
+    ],
+    "peaky": [
+        ("ref_PFCF",      PFCF, {}),
+        ("cap_N_cv.3",    ("normal", "fixed", "clock", "fixed"), {}),
+        ("cap_N_cv.01",   ("normal", "fixed", "clock", "fixed"), dict(capital_cv=0.01)),
+        ("band_N_cv.3",   ("pareto", "normal", "clock", "fixed"), {}),
+        ("band_N_cv.01",  ("pareto", "normal", "clock", "fixed"), dict(band_cv=0.01)),
+        ("close_N_cv.3",  ("pareto", "fixed", "normal", "fixed"), {}),
+        ("close_N_cv.01", ("pareto", "fixed", "normal", "fixed"), dict(close_cv=0.01)),
+        ("size_N_cv.3",   ("pareto", "fixed", "clock", "normal"), {}),
+        ("size_N_cv.01",  ("pareto", "fixed", "clock", "normal"), dict(size_cv=0.01)),
+    ],
+    "qsweep": [
+        (f"q{q}", NFNN, dict(q=q)) for q in (2, 4, 8, 16, 32)
+    ],
+}
 # --------------------------------------------
 
 ARMS = list(itertools.product(("pareto", "normal"),
@@ -273,16 +332,24 @@ def run_one(cap: str, band: str, close: str, size: str, seed: int,
 
 
 def main() -> None:
-    todo = [(cap, band, close, size, seed, bs)
-            for (cap, band, close, size) in ARMS
-            for bs in BAND_SEEDS
-            for seed in SEEDS]
-    print(f"scan: {len(ARMS)} arms x {len(BAND_SEEDS)} band seeds x "
-          f"{len(SEEDS)} seeds = {len(todo)} runs at n={N}, T={T:,}")
+    if SCAN == "blocks":
+        todo = [(None, (cap, band, close, size), {}, seed, bs)
+                for (cap, band, close, size) in ARMS
+                for bs in BAND_SEEDS
+                for seed in SEEDS]
+    else:
+        todo = [(label, knobs, extra, seed, None)
+                for (label, knobs, extra) in FAMILIES[SCAN]
+                for seed in SEEDS]
+    print(f"scan[{SCAN}]: {len(todo)} runs at n={N}, T={T:,}")
     t0 = time.time()
     with open(RESULTS, "w") as f:
-        for i, (cap, band, close, size, seed, bs) in enumerate(todo, 1):
-            row = run_one(cap, band, close, size, seed, band_seed=bs)
+        for i, (label, knobs, extra, seed, bs) in enumerate(todo, 1):
+            cap, band, close, size = knobs
+            row = run_one(cap, band, close, size, seed, band_seed=bs, **extra)
+            if label is not None:
+                row["label"] = label
+                row.update({f"x_{k}": v for k, v in extra.items()})
             f.write(json.dumps(row) + "\n")
             f.flush()
             done = time.time() - t0
@@ -290,11 +357,33 @@ def main() -> None:
             lock_txt = f"lock@{row['t_lock']:,}" if row["locked"] else "no lock"
             if bs is not None:
                 lock_txt += f"  bseed={bs}"
-            print(f"[{i:2d}/{len(todo)}] {row['arm']} seed={seed:2d}  "
+            name = label if label is not None else row["arm"]
+            print(f"[{i:2d}/{len(todo)}] {name:>14} seed={seed:2d}  "
                   f"{row['secs']:5.1f}s  ln_drift={row['ln_drift']:+.3f}  "
                   f"kurt={row['kurt_m1']:8.1f}  {lock_txt}  "
                   f"(eta {eta/60:.0f} min)")
     print(f"done in {(time.time() - t0)/60:.1f} min -> {RESULTS}")
+    if SCAN != "blocks":
+        _family_summary()
+
+
+def _family_summary() -> None:
+    """Per-label means over seeds — the family's verdict table."""
+    rows = [json.loads(l) for l in open(RESULTS)]
+    labels = list(dict.fromkeys(r["label"] for r in rows))
+    print(f"\n  {SCAN} summary (mean over {len(SEEDS)} seeds):")
+    print(f"  {'label':>14} {'|drift|':>8} {'lock%':>6} {'t_lock':>9} "
+          f"{'teeth':>6} {'period':>9} {'kurt':>9} {'E_N':>6}")
+    for lb in labels:
+        g = [r for r in rows if r["label"] == lb]
+        def m(k):
+            v = [r[k] for r in g if r.get(k) is not None
+                 and np.isfinite(r.get(k, float("nan")))]
+            return float(np.mean(v)) if v else float("nan")
+        lockpct = 100.0 * sum(r["locked"] for r in g) / len(g)
+        print(f"  {lb:>14} {m('abs_drift') if 'abs_drift' in g[0] else abs(m('ln_drift')):>8.2f} "
+              f"{lockpct:>5.0f}% {m('t_lock'):>9,.0f} {m('n_snaps'):>6.1f} "
+              f"{m('tooth_period'):>9,.0f} {m('kurt_m1'):>9.1f} {m('E_N'):>6.2f}")
 
 
 if __name__ == "__main__":

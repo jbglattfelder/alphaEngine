@@ -1,22 +1,24 @@
 """
-scan_plots_mvp.py — figures for the block parameter scan (scan_simulation_mvp.py).
+plot_scan.py — figures and tables for scan_simulation_mvp.py results.
 
-Reads scan_results.jsonl and writes two figures:
+Works on any scan family. Set SCAN below (mirroring the scan script) or
+pass a path to load_rows():
 
-  scan_prices_<tag>.png — one panel per arm, all seeds' price paths
-                          overlaid as ln(p/x_0): the qualitative story.
-  scan_stats_<tag>.png  — per-arm strips of the quantitative measures:
-                          drift magnitude, tick volatility, fat tails,
-                          volatility clustering, DC-count exponent,
-                          overshoot/delta ratio.
+  "blocks"  reads scan_results.jsonl; runs are grouped by their four-
+            letter arm code (capital P/N, bands F/N, closing C/N,
+            size F/N — "PFCF" is the frozen default). Rows from older
+            three-letter scans are read as size="fixed".
+  any other family ("bands", "peaky", "qsweep", ...) reads
+            scan_results_<family>.jsonl; runs are grouped by their
+            "label" field, in the order the scan defined them.
 
-Arm code, one letter per block:
-    1st  capital  P=pareto  N=normal
-    2nd  bands    F=fixed   N=normal
-    3rd  closing  C=clock   N=normal
-    4th  size     F=fixed   N=normal  (per-agent q_i)
-"PFCF" is the legacy null, "NFNF" the current default, "NNNN" all switched.
-Rows from older 2^3 scans (three-letter arms) are read as size="fixed".
+Outputs (into eval/runs, family name in the file name):
+  scan_prices_*.png — one panel per group, all seeds' price paths
+                      overlaid as ln(p/x_0): the qualitative story.
+  scan_stats_*.png  — per-group strips of the quantitative measures
+                      (drift, volatility, tails, clustering, DC laws).
+  scan_wall_*.png   — the wealth-wall witnesses per group.
+  print_table()     — the numbers behind the figures.
 """
 
 from __future__ import annotations
@@ -33,12 +35,20 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(HERE)                      # repo root
 sys.path.insert(0, os.path.join(_ROOT, "helper"))
-OUT = os.path.join(_ROOT, "eval", "runs")   # all run outputs land here
+OUT = os.path.join(_ROOT, "eval", "scans")   # all run outputs land here
 os.makedirs(OUT, exist_ok=True)
-IN = os.path.join(OUT, "scan_results.jsonl")
+def _default_in() -> str:
+    return os.path.join(OUT, "scan_results.jsonl" if SCAN == "blocks"
+                        else f"scan_results_{SCAN}.jsonl")
 
-LEGACY_NULL = "PFCF"
-CURRENT_DEFAULT = "NFNF"
+SCAN = "blocks"          # which family's results to read (see docstring)
+
+FROZEN_DEFAULT = "PFCF"  # highlighted in blocks figures
+
+
+def group_of(r: dict) -> str:
+    """A row's group: the family label if present, else the arm code."""
+    return r.get("label", r["arm"])
 
 # which letter means "switched to normal" in each slot
 _NORMAL_AT = ("N", "N", "N", "N")
@@ -70,16 +80,18 @@ def _order_key(code: str) -> tuple:
 
 
 def _label(code: str) -> str:
-    """Human label for one arm."""
-    if code == LEGACY_NULL:
-        return f"{code} — legacy null"
-    if code == CURRENT_DEFAULT:
-        return f"{code} — CURRENT DEFAULT"
-    parts = []
-    for letter, normal_letter, name in zip(code, _NORMAL_AT, _BLOCK_NAME):
-        if letter == normal_letter:
-            parts.append(name)
-    return f"{code} — {'+'.join(parts)}"
+    """Panel title: family labels pass through; blocks arm codes get their
+    knob spelling, with the frozen default marked."""
+    if len(code) != 4 or any(c not in "PNFC" for c in code):
+        return code                       # a family label, not an arm code
+    parts = [f"cap={'pareto' if code[0] == 'P' else 'normal'}",
+             f"band={'fixed' if code[1] == 'F' else 'normal'}",
+             f"close={'clock' if code[2] == 'C' else 'normal'}",
+             f"size={'fixed' if code[3] == 'F' else 'normal'}"]
+    tagline = f"{code}  ({', '.join(parts)})"
+    if code == FROZEN_DEFAULT:
+        tagline += "  — the frozen default"
+    return tagline
 
 
 ARM_ORDER = _all_codes()
@@ -90,7 +102,7 @@ def load_rows(path: Optional[str] = None) -> list[dict]:
     """Read every finished run; normalise older three-letter arm codes
     (pre-size scans) to four letters with size='fixed'."""
     if path is None:
-        path = IN
+        path = _default_in()
     rows = []
     with open(path) as f:
         for line in f:
@@ -144,6 +156,14 @@ def _backfill_wall(r: dict) -> None:
     r["n_reentries"] = int(reentries)      # lower bound (decimated path)
 
 
+def _groups_in(rows: list[dict]) -> list[str]:
+    """Groups present, in display order: arm-code order for blocks,
+    first-appearance order for family labels."""
+    if "label" in rows[0]:
+        return list(dict.fromkeys(group_of(r) for r in rows))
+    return [a for a in ARM_ORDER if any(r["arm"] == a for r in rows)]
+
+
 def _seed_of(row: dict) -> int:
     """Sort key: the run's seed (named function — breakpointable)."""
     return row["seed"]
@@ -157,8 +177,8 @@ def plot_prices(rows: list[dict], save_path: str, show: bool = False) -> str:
     seeds = sorted({r["seed"] for r in rows})
     by_arm = {}
     for r in rows:
-        by_arm.setdefault(r["arm"], []).append(r)
-    arms = [a for a in ARM_ORDER if a in by_arm]
+        by_arm.setdefault(group_of(r), []).append(r)
+    arms = [a for a in _groups_in(rows) if a in by_arm]
 
     # x_0 per row: older rows lack it; infer from the first path point
     y_max = 0.0
@@ -191,7 +211,7 @@ def plot_prices(rows: list[dict], save_path: str, show: bool = False) -> str:
                 color = SEED_COLORS[seeds.index(r["seed"]) % len(SEED_COLORS)]
                 label = f"seed {r['seed']}"
             ax.plot(x, lnp, lw=0.9, color=color, label=label)
-        bold = arm in (LEGACY_NULL, CURRENT_DEFAULT)
+        bold = arm == FROZEN_DEFAULT
         ax.set_title(_label(arm), fontsize=9,
                      fontweight="bold" if bold else "normal")
         ax.set_ylim(-y_max, y_max)
@@ -231,7 +251,7 @@ def plot_stats(rows: list[dict], save_path: str, show: bool = False) -> str:
             x_of[v] = i
         cat_of = _cat_by_group
     else:
-        arms = [a for a in ARM_ORDER if any(r["arm"] == a for r in rows)]
+        arms = _groups_in(rows)
         x_of = {}
         for i, arm in enumerate(arms):
             x_of[arm] = i
@@ -249,7 +269,7 @@ def plot_stats(rows: list[dict], save_path: str, show: bool = False) -> str:
     fig, axes = plt.subplots(2, 3, figsize=(17, 8.5))
     fig.suptitle(f"Block scan — measures per arm  |  n={n}, T={T:,}, "
                  f"{len(seeds)} seeds (dot = one seed, bar = mean)  |  "
-                 f"blue = legacy null, green = current default",
+                 f"blue = the frozen default (blocks scan)",
                  fontsize=12, fontweight="bold")
     for ax, (key, title, ref, scale) in zip(axes.flat, panels):
         for r in rows:
@@ -286,12 +306,12 @@ def plot_stats(rows: list[dict], save_path: str, show: bool = False) -> str:
                                fontsize=7, rotation=45, ha="right")
         else:
             ax.set_xticklabels(arms, fontsize=7, rotation=45, ha="right")
-        if not GROUP_BY and LEGACY_NULL in x_of:
-            ax.axvspan(x_of[LEGACY_NULL] - 0.5, x_of[LEGACY_NULL] + 0.5,
+        if not GROUP_BY and FROZEN_DEFAULT in x_of:
+            ax.axvspan(x_of[FROZEN_DEFAULT] - 0.5, x_of[FROZEN_DEFAULT] + 0.5,
                        color="#2563EB", alpha=0.07)
-        if not GROUP_BY and CURRENT_DEFAULT in x_of:
-            ax.axvspan(x_of[CURRENT_DEFAULT] - 0.5,
-                       x_of[CURRENT_DEFAULT] + 0.5,
+        if not GROUP_BY and FROZEN_DEFAULT in x_of:
+            ax.axvspan(x_of[FROZEN_DEFAULT] - 0.5,
+                       x_of[FROZEN_DEFAULT] + 0.5,
                        color="#15803D", alpha=0.10)
         ax.set_title(title, fontsize=10)
         ax.grid(True, axis="y", ls=":", alpha=0.35)
@@ -330,13 +350,14 @@ def plot_wall(rows: list[dict], save_path: str, show: bool = False,
     n, T = rows[0]["n"], rows[0]["T"]
     by_arm = {}
     for r in rows:
-        by_arm.setdefault(r["arm"], []).append(r)
-    arms = [a for a in ARM_ORDER if a in by_arm]
+        by_arm.setdefault(group_of(r), []).append(r)
+    arms = [a for a in _groups_in(rows) if a in by_arm]
 
     n_cols = 4
     n_rows_fig = (len(arms) + n_cols - 1) // n_cols
     fig, axes = plt.subplots(n_rows_fig, n_cols,
-                             figsize=(17, 3.2 * n_rows_fig), sharey=True,
+                             figsize=(17, 3.2 * n_rows_fig),
+                             sharey=not value_weighted,
                              squeeze=False)
     if value_weighted:
         head = ("The VALUE wall — pushing power per side, in the coin it "
@@ -368,10 +389,17 @@ def plot_wall(rows: list[dict], save_path: str, show: bool = False,
             if r.get("locked"):
                 ax.axvline(r["t_lock"], color="#111827", lw=0.7, ls="--",
                            alpha=0.5)
-        bold = arm in (LEGACY_NULL, CURRENT_DEFAULT)
+        bold = arm == FROZEN_DEFAULT
         ax.set_title(_label(arm), fontsize=9,
                      fontweight="bold" if bold else "normal")
-        ax.set_ylim(0, None)
+        if value_weighted:
+            # locked runs span 0.05x..100x+ (a EUR pile lifts enormous BTC
+            # once the price collapses): multiplicative range -> log axis,
+            # per-panel autoscale, guide line at 1
+            ax.set_yscale("log")
+            ax.axhline(1.0, color="#9CA3AF", lw=0.6, ls=":")
+        else:
+            ax.set_ylim(0, 1.05)
         ax.grid(True, ls=":", alpha=0.35)
     for ax in axes.flat[len(arms):]:
         ax.set_visible(False)
@@ -391,7 +419,7 @@ def plot_wall(rows: list[dict], save_path: str, show: bool = False,
 
 def _cat_by_arm(r: dict):
     """Stats category in scan mode: the arm code."""
-    return r["arm"]
+    return group_of(r)
 
 
 def _cat_by_group(r: dict):
@@ -402,7 +430,7 @@ def _cat_by_group(r: dict):
 def print_table(rows: list[dict]) -> None:
     """Across-seed means per arm, one line per arm present in the data."""
     has_phase = "t_lock" in rows[0]
-    hdr = (f"\n{'arm':>5} {'|drift|':>8} {'sd_rob':>8} {'zero%':>6} "
+    hdr = (f"\n{'group':>14} {'|drift|':>8} {'sd_rob':>8} {'zero%':>6} "
            f"{'kurt_m1':>9} {'ACF|r|L1':>9} {'E_N':>7} {'⟨ω⟩/δ':>7} "
            f"{'alive%':>7} {'trades':>9}")
     if has_phase:
@@ -411,8 +439,8 @@ def print_table(rows: list[dict]) -> None:
     if has_wall:
         hdr += f" {'wall':>7} {'ammo@lk':>8} {'re-ent':>7}"
     print(hdr)
-    for arm in ARM_ORDER:
-        sub = [r for r in rows if r["arm"] == arm]
+    for arm in _groups_in(rows):
+        sub = [r for r in rows if group_of(r) == arm]
         if not sub:
             continue
 
@@ -428,7 +456,7 @@ def print_table(rows: list[dict]) -> None:
                     vals.append(v)
             return np.mean(vals) if vals else float("nan")
 
-        line = (f"{arm:>5} {mean_of('ln_drift', abs):>8.3f} "
+        line = (f"{arm:>14} {mean_of('ln_drift', abs):>8.3f} "
                 f"{mean_of('sd_rob'):>8.4f} {100*mean_of('zero_frac'):>5.1f}% "
                 f"{mean_of('kurt_m1'):>9.1f} {mean_of('acf_abs_L1'):>9.3f} "
                 f"{mean_of('E_N'):>7.2f} {mean_of('os_ratio'):>7.2f} "
@@ -475,22 +503,31 @@ if __name__ == "__main__":
         GROUP_BY = args[i + 1]
         del args[i:i + 2]
     if args:
-        IN = args[0]               # plot any results file: python scan_plots_mvp.py my.jsonl
+        _cli_in = args[0]          # plot any results file: python plot_scan.py my.jsonl
+        globals()["_default_in"] = lambda _p=_cli_in: _p
         args = args[1:]
     if args:
         raise SystemExit(f"unrecognised arguments: {args} — usage: "
-                         f"python scan_plots_mvp.py [results.jsonl] "
+                         f"python plot_scan.py [results.jsonl] "
                          f"[--group-by KEY]")
     if GROUP_BY:
         print(f"SWEEP MODE: grouping by '{GROUP_BY}' "
               f"(colors/x-axis = its values, not seeds/arms)")
-    rows = load_rows(IN)
+    rows = load_rows()
+    if not rows:
+        import glob
+        have = sorted(os.path.basename(f)
+                      for f in glob.glob(os.path.join(OUT, "scan_results*.jsonl"))
+                      if os.path.getsize(f) > 0)
+        raise SystemExit(
+            f"no rows in {_default_in()} — is SCAN (currently '{SCAN}') set to "
+            f"the family you ran? Non-empty results in eval/runs: {have or 'none'}")
     n, T = rows[0]["n"], rows[0]["T"]
-    tag = f"mvp_scan_n{n}_T{T}"
+    fam = "" if SCAN == "blocks" else f"_{SCAN}"
+    tag = f"mvp_scan{fam}_n{n}_T{T}"
     if GROUP_BY:
         tag += f"_by-{GROUP_BY}"   # sweep figures never collide with plain ones
-    print(f"{len(rows)} runs loaded, arms present: "
-          f"{sorted({r['arm'] for r in rows}, key=_order_key)}")
+    print(f"{len(rows)} runs loaded, groups present: {_groups_in(rows)}")
     print_table(rows)
     plot_prices(rows, os.path.join(OUT, f"scan_prices_{tag}.png"))
     plot_stats(rows, os.path.join(OUT, f"scan_stats_{tag}.png"))

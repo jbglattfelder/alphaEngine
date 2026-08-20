@@ -3,8 +3,10 @@ simulation_mvp.py — the Alpha Engine null model.
 
 THE MODEL
 ---------
-A closed two-currency market (BTC/EUR). n "longs" (start EUR-heavy, buy
-BTC) and n "shorts" (start BTC-heavy, sell BTC); side is fixed for life.
+A closed two-currency market (BTC/EUR). n "longs" open positions by
+buying BTC; n "shorts" open by selling it; side is fixed for life. At the
+default f=0.5 every agent starts with the identical wallet (half EUR,
+half BTC) — the sides differ only in direction.
 There is no external price feed and no external money: THE PRICE IS THE
 LAST TRADE. Every agent only ever does four things:
 
