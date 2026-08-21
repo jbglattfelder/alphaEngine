@@ -118,7 +118,7 @@ by itself evidence of information, strategy, or skill.
 
 ---
 
-# EVAUATION of scan results
+# EVALUATION of scan results
 
 ## 1. What each knob does (the 16-combination scan)
 
@@ -134,6 +134,8 @@ market's texture:
 - *Everyone their own bands* ("normal"): exit orders smear over a whole
   range of prices, the book becomes dense, and the price creeps through
   it in tiny steps. Per-tick volatility ≈ 0.0006 — **about 25× quieter**
+  (this number is set by how widely the bands are SPREAD, not by the
+  bands themselves — see section 3 below)
   — yet these markets lock into the sawtooth far MORE often (95% vs 64%
   of runs), travel further (mean |drift| 4.0 vs 2.9), and show stronger
   volatility clustering (0.55 vs 0.30). Quiet, but more extreme.
@@ -170,3 +172,81 @@ decoration — market-responsive timing and sizing belong to the next
 level of the model. And since real markets certainly have heterogeneous
 wealth and heterogeneous exit rules, the null's message is that their
 locking tendencies need no further explanation.
+
+## 2. Tilting the exit rules (the bands scan)
+
+Every agent leaves a trade either happy (price moved 1% in its favor —
+the "take-profit") or sad (1% against — the "stop-loss"). What if those
+two distances are not equal? Six variants, all in the calm NFNN world:
+
+- **How jumpy the market is depends on the happy exit only.** Per-tick
+  wiggle = 1.44 × the take-profit distance, almost exactly, whatever the
+  stop is set to. Reason: happy exits are *waiting* orders — they sit in
+  the book and form the rungs of a ladder the price climbs; the rung
+  spacing IS the take-profit distance. Sad exits fire and vanish; they
+  leave no rungs.
+- **Patient losers make calm markets.** Stops wider than take-profits
+  (leave sad only after −2%, leave happy at +1%): no run ever locked,
+  and the jumpiness statistics came out almost bell-curve normal — the
+  tamest, most "healthy-looking" market the model has produced.
+- **Twitchy losers make wild markets.** Stops tighter than take-profits
+  — the textbook advice "cut your losses early, let profits run" — never
+  calmed anything: fewer full lock-ins than the symmetric case, but the
+  most violent jumps of all (rare-event measures 500–1000× a bell
+  curve), because tight stops mean panic exits fire constantly, each one
+  shoving the price.
+- The amusing inversion: the famous investor "mistake" (take profits
+  quickly, let losses ride) is exactly what *stabilizes* this market,
+  and the famous "discipline" destabilizes it. In a world with no
+  information, patience with losses is a public good.
+
+## 3. Sliding each dial to zero (the peaky scan)
+
+Each "normal" dial adds person-to-person variety with an adjustable
+spread. Shrink the spread toward zero and each dial should smoothly
+become its no-variety sibling. Does it?
+
+- **Timing and bite-size: yes.** Shrunk to near-zero spread, both are
+  statistically indistinguishable from their siblings. Smooth, boring,
+  as designed.
+- **Money: the everyone-equal world has a pulse.** With all wallets
+  (nearly) identical, all internal clocks are identical too — so the
+  whole population acts *in unison*, and the price moves in visible
+  staircase steps with the most extreme jump statistics of the family.
+  No lock-ins, though: equality means no whales, and no whales means no
+  walls.
+- **Bands: NO — and this is the family's discovery.** Shrinking the
+  band spread does *not* recreate the everyone-identical market. With
+  exactly equal bands, all the waiting exit orders stack at the same
+  price: one thick rung, and the price jumps rung to rung. Give the
+  bands ANY spread at all — even ±0.03% around 1% — and the single rung
+  splits into a fine staircase that the price creeps through in
+  microscopic steps. Measured: the per-tick wiggle equals the *spread*
+  of the bands, not the bands (spread 0.0001 → wiggle 0.00008). The
+  identical-bands market is a knife's edge: an infinitely sharp special
+  case that any real-world variety, however tiny, tips over into a
+  completely different market. Since no real market has perfectly
+  identical participants, the creeping kind is the realistic kind.
+
+## 4. Bite size (the q scan)
+
+Each agent bets 1/q of its wealth per trade. Sweeping q from 2 (half
+your wealth per bite) to 32 (slivers):
+
+- **Jumpiness does not care.** Per-tick wiggle identical to three
+  decimal places across the whole sweep — more proof that the exit
+  ladder, not the order size, sets the market's texture.
+- **Lock-ins peak in the middle.** Giant bites (q=2) gouge visible
+  teeth in the price but never fully pin the market — a huge order
+  swallows the opposing wall and thereby spends itself. Slivers (q=32)
+  are a harmless stream. The dangerous zone is between (q≈8–16, 40% of
+  runs locked): bites big enough to push, small enough not to
+  self-destruct. Moderation, it turns out, is what pins markets.
+
+## The one-sentence summary of all three scans
+
+WHERE the waiting exit orders sit sets the market's texture (and
+identical-for-everyone is a razor-thin special case); HOW BIG the bites
+are sets whether it locks (with the danger in the middle, not the
+extremes); WHEN people act, as long as it is blind to the market,
+sets nothing at all.

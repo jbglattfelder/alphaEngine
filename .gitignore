@@ -5,7 +5,6 @@ __pycache__/
 arch/
 old/
 tmp/
-*.csv
 *.patch
 *.npz
 *.sh

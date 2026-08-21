@@ -16,6 +16,18 @@ zero-sum. Every agent only ever does four things:
 3. **LEAVE SAD** — a stop-loss fires a market order ("get me out now").
 4. **TIME OUT** — the clock fires while holding: exit at market.
 
+**There is no market maker, so the bid–ask spread is emergent:** it is
+simply the gap between the nearest resting buy and sell orders — and
+nobody guarantees there are any. In a large calm market the book is
+almost always two-sided and tight: at n=5,000 (NFNN defaults), ~98% of
+ticks have both sides quoted, with a median spread of ~0.05% of the
+price and a wide distribution (often near zero; ~0.6% at the 90th
+percentile; the ceiling is the ±1% exit-band scale, since resting
+take-profits are what populate the book). In small or one-sided markets
+the spread can be band-wide, or a side can be empty entirely — a market
+order that finds nobody home simply retries next tick. The engine
+guarantees the book is never *crossed*, not that it is always quoted.
+
 **The intent.** This is a *null model* in the strict sense: the baseline
 against which any claim about markets must be measured. Before attributing a
 market phenomenon — fat tails, volatility clustering, crashes, trends,
