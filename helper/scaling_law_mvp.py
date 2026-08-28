@@ -85,19 +85,56 @@ def analyse_scaling(prices: np.ndarray,
                     delta_lo_mult: float = DELTA_LO_MULT,
                     delta_hi_mult: float = DELTA_HI_MULT,
                     n_deltas: int = N_DELTAS,
-                    min_events: int = MIN_EVENTS) -> dict:
+                    min_events: int = MIN_EVENTS,
+                    deltas: Optional[np.ndarray] = None,
+                    trunc_frac: Optional[float] = None) -> dict:
     """Measure the two laws on a price series. Returns everything the plot
     and the report need: the usable delta grid, DC counts, overshoot means
-    and medians, the log-log fits, and the overshoot/delta ratios."""
+    and medians, the log-log fits, and the overshoot/delta ratios.
+
+    deltas     : optional explicit threshold grid (log-returns, e.g.
+                 np.geomspace(0.005, 0.04, 10)). When given, it replaces the
+                 automatic sd-scaled grid — use a FIXED physical grid to
+                 compare regimes or runs on identical thresholds. Choose
+                 deltas ABOVE the feed's quote-granularity scale (in this
+                 model: the tp band — below it you measure the order-book
+                 ladder, ω→0) and BELOW ~1/8 of the path's log-range (above
+                 it you measure truncation). If no such window exists, the
+                 segment has no diffusive intrinsic-time regime — that is a
+                 property of the feed, and a finding, not a tuning failure.
+    trunc_frac : optional truncation guard. Thresholds above
+                 trunc_frac * (total log-price range) are dropped: at such
+                 scales the path cannot hold untruncated overshoots, and the
+                 "law" would measure the path's extent, not its structure.
+                 The result reports them in "trunc_dropped". Off (None) by
+                 default so existing measurements stay bit-identical."""
     prices = np.asarray(prices, float)
     prices = prices[np.isfinite(prices) & (prices > 0)]
     n_t = len(prices)
     sd = robust_tick_sd(prices)
 
-    deltas = np.exp(np.linspace(np.log(delta_lo_mult * sd),
-                                np.log(delta_hi_mult * sd), n_deltas))
+    if deltas is None:
+        grid = np.exp(np.linspace(np.log(delta_lo_mult * sd),
+                                  np.log(delta_hi_mult * sd), n_deltas))
+    else:
+        grid = np.asarray(deltas, float)
+
+    trunc_dropped = 0
+    if trunc_frac is not None:
+        lnp = np.log(prices)
+        path_range = float(lnp.max() - lnp.min())
+        keep = grid <= trunc_frac * path_range
+        trunc_dropped = int((~keep).sum())
+        grid = grid[keep]
+        if len(grid) == 0:
+            raise RuntimeError(
+                f"all thresholds truncation-guarded away: path range "
+                f"{path_range:.3f} log units, guard at "
+                f"{trunc_frac:.3g} * range = {trunc_frac*path_range*100:.2f}% "
+                f"— every requested delta exceeds it. The path is too short "
+                f"(in range, not ticks) for these scales.")
     rows = []
-    for d in deltas:
+    for d in grid:
         m = measure(prices, float(d), n_t, min_events)
         if m is not None:
             rows.append(m)
@@ -109,12 +146,12 @@ def analyse_scaling(prices: np.ndarray,
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")   # a bare probe (min_events=1) may
-            probe = measure(prices, float(deltas[0]), n_t, 1)  # average nothing
+            probe = measure(prices, float(grid[0]), n_t, 1)  # average nothing
         n_floor = probe["N"] if probe else 0
         raise RuntimeError(
             f"only {len(rows)} usable thresholds (need 3): {n_t:,} ticks, "
-            f"robust sd {sd:.4g}, grid {deltas[0]*100:.2f}%–"
-            f"{deltas[-1]*100:.2f}%, DC events at the grid floor: {n_floor} "
+            f"robust sd {sd:.4g}, grid {grid[0]*100:.2f}%–"
+            f"{grid[-1]*100:.2f}%, DC events at the grid floor: {n_floor} "
             f"(each threshold needs >= {min_events}). The path has too few "
             f"reversals at these scales — near-monotone feeds (tiny n, "
             f"locked sawtooth ramps) have no intrinsic-time structure here. "
@@ -133,6 +170,7 @@ def analyse_scaling(prices: np.ndarray,
         "D": D, "NDC": NDC, "OS": OS, "OSM": OSM,
         "E_N": E_N, "C_N": C_N, "R_N": R_N,
         "E_os": E_os, "C_os": C_os, "R_os": R_os,
+        "trunc_dropped": trunc_dropped,
         "ratio": float(np.mean(OS / D)),
         "ratio_med": float(np.mean(OSM / D)),
     }
@@ -198,7 +236,7 @@ def plot_scaling_laws(sim, save_path: Optional[str] = None, show: bool = False,
             save_path = f"scaling_laws_{tag}.png"
     print(f"\n[scaling laws — {base_txt}]")
     try:
-        res = analyse_scaling(prices)
+        res = analyse_scaling(prices, trunc_frac=0.125)
     except RuntimeError as err:
         # a feed without DC structure is a legitimate outcome, not a crash:
         # report why, skip the figure, let the rest of the run block proceed
@@ -228,8 +266,16 @@ def plot_scaling_laws(sim, save_path: Optional[str] = None, show: bool = False,
     # RIGHT: mean overshoot — the liquidity component
     a2.loglog(D, OS, "o", ms=6, color="#15803D",
               label=f"mean  (⟨ω⟩/δ={res['ratio']:.2f})")
-    a2.loglog(D, OSM, "s", ms=5, color="#2563EB", mfc="none",
-              label=f"median  (/δ={res['ratio_med']:.2f}, drift-robust)")
+    # Ladder quantization: at δ near the band rungs, more than half the DC
+    # events can overshoot by exactly nothing — the median collapses to dust
+    # (~1e-16) and drags the log axis into oblivion. Draw only meaningful
+    # medians; count the off-scale ones in the label. (The printed ratios
+    # still include the zeros — they are real events, just unplottable.)
+    med_ok = OSM > 0.02 * D
+    n_dust = int((~med_ok).sum())
+    a2.loglog(D[med_ok], OSM[med_ok], "s", ms=5, color="#2563EB", mfc="none",
+              label=f"median  (/δ={res['ratio_med']:.2f}, drift-robust)"
+                    + (f"; {n_dust} pts ≈ 0 off-scale" if n_dust else ""))
     a2.loglog(xs, (xs / res["C_os"]) ** res["E_os"], "-", color="#B45309",
               lw=1.6, label=f"mean fit: E = {res['E_os']:.3f}  "
                             f"(R²={res['R_os']:.3f})")

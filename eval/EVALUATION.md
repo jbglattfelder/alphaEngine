@@ -250,3 +250,117 @@ identical-for-everyone is a razor-thin special case); HOW BIG the bites
 are sets whether it locks (with the danger in the middle, not the
 extremes); WHEN people act, as long as it is blind to the market,
 sets nothing at all.
+
+---
+
+# EVALUATION of the big runs (total of 10,000 and 15,000 agents)
+
+We then ran the model at serious size — up to 15,000 agents for 400,000
+ticks — in two flavors. In the first, every agent has the SAME exit
+rules (take profit at +1%, bail at -1%): the simplest possible world,
+and the one all the scans grew from. In the second, every agent gets its
+OWN personal exit rules, drawn around 1%: the realistic world — recall
+from the scans that "identical for everyone" is a knife's edge no real
+market sits on. The shift between the two turned out to be one of the
+biggest stories of the whole project. Findings in order of surprise.
+
+## 1. Crashes are not a small-market problem
+
+The sawtooth (the slow-bleed-and-snap cycle) disappears in big markets,
+as expected: it needs one big player's wall, and a crowd has no walls.
+But big markets found a new failure: **sudden cliff crashes** — the
+price falling off a step in moments. The mechanism is a chain reaction:
+people who bought at similar times have their panic exits at similar
+prices, so one dip triggers a batch of panic selling, which triggers the
+next batch, like dominoes. And adding more agents just adds more
+dominoes. So the two classic disasters split cleanly: **the sawtooth is
+a small-market disease; the crash is not.** Even a market of thousands
+of mindless, uncoordinated agents crashes — no panic psychology
+required, just exit rules standing too close together.
+
+## 2. A market can shrink without losing anyone
+
+One big run in the same-rules world (15,000 agents) collapsed
+88% and then settled into a narrow range — and in that range, the little
+sawtooth came BACK, in a market of thousands. The resolution: what
+matters is not how many agents exist but how many still have meaningful
+money. After the collapse, wealth was so concentrated that the market
+effectively contained only a handful of players again. **The effective
+size of a market is set by its wealth distribution, not its head count —
+and it can shrink during the run.** A market that grinds its losers down
+eventually behaves like a small market, whatever its population.
+
+## 3. Variety keeps markets alive
+
+Then the big switch: the same market, but with every agent's exit rules
+drawn individually. The change of character was dramatic. The same-rules
+big market moves in fixed 1% hops — the price climbs a ladder whose
+rungs are everyone's identical exit orders, and at some sizes it locks
+into that ladder entirely. The varied market has no rungs: it creeps in
+microscopic steps, its extreme-jump statistics calm from astronomical to
+merely large, and it never locked and never sawtoothed — it trended,
+corrected, crashed once and recovered, and was still going strong when
+time ran out, at both 10,000 and 15,000 agents. The small-market scans
+had suggested varied exit rules cause MORE locking; at scale the
+opposite holds. **Diversity of behavior is what keeps a big market from
+getting stuck.** These varied-rules runs also redistribute wealth far
+more dramatically: the spread of individual outcomes is several times
+wider, and it is always the LOSING side that redistributes internally —
+lucky losers profit hugely from unlucky ones, while the winning side's
+gains stay modest and even.
+
+## 4. Big calm markets damp their own moves
+
+In every big, healthy run, price moves systematically travel LESS beyond
+any threshold than a coin-flip price would — roughly half as far. The
+deep pile of waiting orders absorbs momentum: push the price, and the
+book pushes back. Small print: real currency markets do NOT show this —
+their moves carry through in full. So the mindless market is actually
+*calmer* than the real thing, and whatever real markets have that keeps
+their moves carrying (herding, trend-chasing, news) is precisely what
+this model leaves out — by design. The one place our model DID match the
+real-market pattern was the collapsed, concentrated market of finding 2:
+the pattern real markets show appeared here only in the dying state.
+
+## 5. The market writes its own price tag
+
+Nobody in this model is paid to quote prices — there is no market maker.
+The gap between the best buyer and the best seller (the "spread", the
+cost of trading right now) simply emerges from whatever orders happen to
+be resting. In the big runs it emerges remarkably well: both sides are
+quoted about 98% of the time, and the typical gap is about 0.05% of the
+price — a twentieth of the 1% exit bands, because the resting orders of
+thousands of agents, anchored to thousands of different past prices,
+pave the price axis almost continuously. The paving is a crowd product:
+run the same market with 1,000 agents instead of 10,000 and both sides
+are present only ~78% of the time, with a gap eight times wider. **A
+tight, always-open market is not something someone provides — it is
+something a crowd secretes.**
+
+## 6. The calm is worth money — and that is a design question
+
+If moves reliably fall short, betting against every move is profitable.
+We tested this: a simple rule — whenever the price reverses by 1%, bet
+that the reversal fizzles — wins 87% of the time and clears realistic
+trading costs several times over on the big-run data. Nobody inside the
+model can exploit this (they cannot see the market), but an outside
+agent could, and its profits would drain the internal agents' wealth —
+shrinking the market's effective size (finding 2) until it dies. So the
+plan to use this market as a substrate for smarter agents has a
+condition attached: either the internal agents' losses must be
+replenished (retire the bankrupt, admit fresh participants), or the
+predictability must be priced in as the cost of the liquidity the
+substrate provides. That decision — not more simulation — is the next
+step.
+
+## Where this leaves the project
+
+The mindless market is a good shock absorber: deep, almost always
+quoted on both sides, self-damping, and hard to get stuck when its
+participants are varied. It is NOT a copy of real markets — it is
+calmer, and exploitably so. For its intended role — the always-humming
+internal engine that smarter agents will one day trade against — that
+may be exactly right: let the substrate be simple and absorbing, and
+let realism emerge from the smart agents plugged into it. Then anything
+the composite market does that this null does not is, by construction,
+the measurable contribution of intelligence.

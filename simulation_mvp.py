@@ -55,6 +55,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from decimal import Decimal, getcontext
+from time import time
 from typing import Optional, Self, TextIO
 
 import numpy as np
@@ -121,7 +122,7 @@ class Config:
     # ── outputs ──────────────────────────────────────────────────────────────
     save_csv: bool = True     # write price_btc_eur_<tag>.csv + trades_<tag>.csv
                               # at run end (sweeps pass False)
-    save_tapes: bool = False  # write tape_<tag>.npy (tick prices) and
+    save_tapes: bool = True  # write tape_<tag>.npy (tick prices) and
                               # tape_<tag>_events.npz (every print) at run end,
                               # so analyses can be re-sliced without re-running
     print_log: bool = True    # write log_<tag>.txt — one narrative line per
@@ -1390,8 +1391,13 @@ class Simulation:
 
     def run(self) -> Self:
         """Run the full horizon."""
+        hb = time.time() 
         for t in range(1, self.cfg.T + 1):
             keep_going = self.step(t)
+            if t % 25_000 == 0 and t:
+                now = time.time()
+                print(f"t={t:,}  p={self.p:.2f}  ({now - hb:.0f}s for last 25k)", flush=True)
+                hb = now
             if not keep_going:
                 break
         if self.stopped_reason is None:
@@ -1484,7 +1490,7 @@ if __name__ == "__main__":
     T = 150_000      # ticks
     SEED = 9
     CAPITAL_DIST = "normal"   # block 2a: "pareto" | "normal"
-    BAND_DIST = "fixed"       # block 2b: "fixed"  | "normal"
+    BAND_DIST = "normal"       # block 2b: "fixed"  | "normal"
     CLOSING = "normal"         # block 2c: "clock"  | "normal"
     SIZE_DIST = "normal"       # block 2d: "fixed"  | "normal"
     SHOW = True               # pop the figures in the IDE (they save either way)
@@ -1495,9 +1501,6 @@ if __name__ == "__main__":
     sim = Simulation(cfg).run()
     print(sim.summary())
     tag = cfg_tag(cfg)
-    print("wrote:",
-          sim.write_price_csv(os.path.join(OUT, f"price_btc_eur_{tag}.csv")),
-          sim.write_trades_csv(os.path.join(OUT, f"trades_{tag}.csv")))
 
     elapsed = time.time() - t
     print(f"elapsed time: {elapsed:.2f} s")
