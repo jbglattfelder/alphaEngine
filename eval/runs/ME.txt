@@ -1,0 +1,22 @@
+So, the null model is frozen and the repo is cleared up:
+    https://github.com/jbglattfelder/alphaEngine/tree/main
+
+The readme file in the root directory gives you a concise overview of the current state. In the dev/ directory the development history is archived.
+
+In a nutshell:
+A zero-intelligence agent based model with longs and shorts trading through an order book based on simple rules of interaction. We get bubbles, crashes, trends, volatility clustering, fat tails, and some scaling laws similar to real FX data. There is no market maker, so the bid–ask spread is emergent (for a 10k run ~98% of ticks have both sides quoted, with a median spread of ~0.05%). The parameter space is constrained, as there are only four dials: when to open, when to close (take profit, stop loss, timer), wealth distribution, and trade size. Most of the development effort went into making the emergent behavior symmetrical. This was achieved by hunting every hidden mechanical bias (random ordering, symmetrical percentages, sizing symmetric at every price, own-currency settlement, no self-trading, ...).
+
+The 10k agent run (config n=5k) is the most interesting outcome:
+-Price evolution: https://github.com/jbglattfelder/alphaEngine/blob/main/eval/runs/dashboard_mvp_n5000_s9_x0-100.0_cap-normal_close-normal_size-normal.png
+-Price CSV: https://github.com/jbglattfelder/alphaEngine/blob/main/eval/runs/price_btc_eur_mvp_n5000_s9_x0-100.0_cap-normal_close-normal_size-normal-snippet.csv
+-Order book: https://github.com/jbglattfelder/alphaEngine/blob/main/eval/runs/orderbook_mvp_n5000_s9_x0-100.0_cap-normal_close-normal_size-normal.png
+
+Parameter space explorations are in the eval/scans/ directory/. See eval/EVALUATION.md for a summary of the current findings.
+
+Trade history in eval/bench/:
+-trades_mvp_*.csv
+-log_mvp_*.txt
+
+In eval/validate/ you can find:
+-A spreadsheet of an individual agent's trade history and PnL (n=2): https://github.com/jbglattfelder/alphaEngine/blob/main/eval/validate/L0_trades.xls
+-A plain word narration of how the trading starts (n=2): https://github.com/jbglattfelder/alphaEngine/blob/main/eval/validate/narration_log_mvp_n2_s9_x0-100.0_cap-normal_close-normal_size-normal.txt

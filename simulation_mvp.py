@@ -55,7 +55,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from decimal import Decimal, getcontext
-from time import time
+import time
 from typing import Optional, Self, TextIO
 
 import numpy as np
@@ -122,6 +122,9 @@ class Config:
     # ── outputs ──────────────────────────────────────────────────────────────
     save_csv: bool = True     # write price_btc_eur_<tag>.csv + trades_<tag>.csv
                               # at run end (sweeps pass False)
+    save_book: bool = True   # every book_stride ticks, snapshot the top
+    book_levels: int = 15     # book_levels price levels per side (price, size)
+    book_stride: int = 5      # -> tape_<tag>_book.npz at run end
     save_tapes: bool = True  # write tape_<tag>.npy (tick prices) and
                               # tape_<tag>_events.npz (every print) at run end,
                               # so analyses can be re-sliced without re-running
@@ -814,7 +817,10 @@ class Simulation:
 
         # trade log for trades_mvp.csv: one row per print, tagged by the TAKER
         # (the incoming order that walked the book)
-        self.trades_log: list[tuple] = []        # (tick, trade_id, taker, side,
+        self.trades_log: list[tuple] = []
+        self._book_b: list = []           # save_book snapshots (bids)
+        self._book_a: list = []           # save_book snapshots (asks)
+        self._book_t: list = []           # snapshot ticks        # (tick, trade_id, taker, side,
                                                  #  size, price, buy_agent,
                                                  #  sell_agent) — [5]=price is
                                                  #  load-bearing for consumers
@@ -1345,6 +1351,8 @@ class Simulation:
 
         self.rec_tick.append(t)
         self.rec_price.append(self.p)
+        if self.cfg.save_book and self.t % self.cfg.book_stride == 0:
+            self._snap_book()
         self.rec_price_hi.append(float(tick_hi))
         self.rec_price_lo.append(float(tick_lo))
         self.rec_crossed.append(bool(self._trades_this_tick))
@@ -1389,6 +1397,24 @@ class Simulation:
             return False
         return True
 
+    def _snap_book(self) -> None:
+        """Aggregate live resting volume per price level; keep the top
+        cfg.book_levels of each side. Rows: (price, size), NaN-padded."""
+        from collections import defaultdict
+        K = self.cfg.book_levels
+        for orders, out, sign in ((self.book.bids, self._book_b, -1),
+                                  (self.book.asks, self._book_a, +1)):
+            lv: dict = defaultdict(float)
+            for o in self.book._live(orders):
+                lv[o.price] += o.size
+            top = sorted(lv.items(), key=lambda x: sign * x[0])[:K]
+            row = np.full((K, 2), np.nan, np.float32)
+            for k, (p, s) in enumerate(top):
+                row[k, 0] = p
+                row[k, 1] = s
+            out.append(row)
+        self._book_t.append(self.t)
+
     def run(self) -> Self:
         """Run the full horizon."""
         hb = time.time() 
@@ -1411,6 +1437,12 @@ class Simulation:
             np.savez_compressed(base + "_events.npz",
                                 p=np.asarray([r[5] for r in self.trades_log]),
                                 t=np.asarray([r[0] for r in self.trades_log]))
+        if self.cfg.save_book and self._book_t:
+            base = os.path.join(OUT, f"tape_{cfg_tag(self.cfg)}")
+            np.savez_compressed(base + "_book.npz",
+                                t=np.asarray(self._book_t),
+                                bids=np.stack(self._book_b),
+                                asks=np.stack(self._book_a))
         if self._logf:
             self._plog(f"t={self.cfg.T} END p={self.p:.6f} "
                        f"ln(p/x0)={math.log(self.p / self.cfg.x_0):+.4f}")
@@ -1519,8 +1551,18 @@ if __name__ == "__main__":
     plot_scaling_laws(sim, save_path=laws_png, show=SHOW)
     plot_stylized_facts(sim, save_path=facts_png, show=SHOW)
     # the same two analyses on the EVENT tape (one price per print):
-    # intrinsic time on the model's true clock, intra-tick wicks included
-    plot_scaling_laws(sim, save_path=laws_ev_png, show=SHOW, time_base="event")
-    plot_stylized_facts(sim, save_path=facts_ev_png, show=SHOW, time_base="event")
-    print("wrote:", dash_png, book_png, laws_png, facts_png,
-          laws_ev_png, facts_ev_png)
+    # intrinsic time on the model's true clock, intra-tick wicks included.
+    # Big tapes OOM here (the live sim + the print arrays + the analysis all
+    # coexist), so those are routed to the standalone lean process instead.
+    n_prints = len(sim.trades_log)
+    if n_prints <= 20_000_000:
+        plot_scaling_laws(sim, save_path=laws_ev_png, show=SHOW, time_base="event")
+        plot_stylized_facts(sim, save_path=facts_ev_png, show=SHOW, time_base="event")
+        print("wrote:", dash_png, book_png, laws_png, facts_png,
+              laws_ev_png, facts_ev_png)
+    else:
+        tape = os.path.join(OUT, f"tape_{tag}_events.npz")
+        print(f"event figures skipped in-run ({n_prints:,} prints > 20M) — "
+              f"after the run, generate them lean:\n"
+              f"    python helper/plots_from_tape.py {tape}")
+        print("wrote:", dash_png, book_png, laws_png, facts_png)
