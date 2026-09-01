@@ -364,3 +364,103 @@ may be exactly right: let the substrate be simple and absorbing, and
 let realism emerge from the smart agents plugged into it. Then anything
 the composite market does that this null does not is, by construction,
 the measurable contribution of intelligence.
+
+---
+
+# EVALUATION of the seed battery (five runs of 15,000 agents)
+
+The same big, varied market (all four dials normal, 7,500 agents per
+side, 400,000 ticks) was then run with five different random seeds.
+Five is a small number, but it is enough to answer the questions the
+first big runs raised — and to correct two things we had said.
+
+## 1. Chaotic in detail, lawful in shape
+
+The model is as path-dependent as a system can be. We ran one world
+twice with only a single floating-point bit of difference between them
+(the last digit of one order's size): the two runs are identical for
+eleven ticks and then part ways for good. Every run is a separate,
+unrepeatable history — the textbook signature of chaos.
+
+And yet the five runs rhyme. Each traces the same kind of arc: a long
+excursion away from the starting price — up or down — followed by a
+pull back toward it, with the return often arriving late. The reason
+is a genuine restoring force: the further the price travels, the
+thinner the book becomes in the units that matter for the trip back
+(at low prices the resting euros lift many coins; at high prices the
+resting coins absorb many euros), so returning is always cheaper than
+continuing. Which way any run goes, and how far, is a coin toss; that
+it eventually turns is physics. Like weather: no two days alike, all of
+them seasons.
+
+## 2. Direction is symmetric — measured, then proven
+
+The first big runs all happened to end up. Five seeds later the tally is
+three up, one flat (a 70% fall and a full recovery to the start), and
+one down — and archived scans of the same world at small size split
+eight up to nine down over seventeen runs. The bit-level test settled
+it: the rules treat the two sides as exact mirror images; only the
+floating-point arithmetic differs in the last digit, and that has no
+direction. The similarity you see across runs is the arc, not a hidden
+tilt.
+
+Two corrections on record. Earlier we suggested big runs were
+"compressed" into a narrow range of outcomes; five seeds show
+excursions vary widely — one run fell 95% — so that was three-sample
+luck. And we had counted the returning "late rally" as a systematic
+event; it is systematic only as a return, and only when the prior
+excursion went down.
+
+## 3. A market can survive a 95% crash without stopping
+
+One seed rose to 264 and then fell, over 200,000 ticks, to 9 — a 95%
+drawdown. It never stopped. Trading continued at the same rate as
+before, both sides were still quoted most of the time, the spread
+stayed tight, and in the final stretch the price bounced 35% off its
+low: the restoring force engaging. It was the most volatile phase of
+any run, not the quietest. A dead market pins; this one thrashed and
+turned. In this model, size plus variety buys resilience even to a
+near-total collapse.
+
+## 4. Nobody ever goes broke — the market dies of exclusion, not
+## bankruptcy
+
+The engine has a bankruptcy rule. Across every archived run — well over
+a hundred — it has never fired: not one agent has gone broke, ever.
+Sizing is a fixed fraction of wealth, so losses shrink with the loser
+and never reach zero. What actually happens to a heavy loser is that
+its wealth falls below the smallest tradable order and it can no longer
+participate: alive, but excluded. This is the individual's view of the
+"shrinking market" finding above, and it changes the design of any
+recycling mechanism: there is no corpse to replace. The right rule is to
+retire the poorest participant and seed a fresh one — and the right
+health measure is not "how many are alive" (always all) but "how many
+can still place an order."
+
+## 5. The book shows its moves coming — the bow-wave
+
+With the order book recorded every few ticks (new in this batch), the
+depth chart revealed something the price alone never could. Depth is
+almost never on both sides at once: there is a mountain on one side, and
+it sits on the side the price is moving TOWARD. The mechanism is the
+model's deepest result made visible. When the price rises, everyone who
+bought on the way up parks a take-profit one band above their entry —
+so an advance continuously lays a wall of its own profit-taking just
+ahead of itself, and then climbs by eating it. Reverse the move and the
+wall flips sides within a few dozen ticks. A market that builds its own
+resistance out of its participants' optimism, one band ahead, is why
+moves fizzle, why the market damps itself, and where the fizzle-bet's
+profit comes from — all in one picture.
+
+## 6. Two things the eye gets wrong about depth
+
+First, resting volume measured in coins rises as the price falls and
+falls as it rises — not because liquidity drains, but because the same
+euros buy fewer coins at a higher price. Measured in value, the book's
+resting capital stays roughly constant through a threefold price swing.
+Second, a bigger crowd does not make a heavier book: total capital is
+fixed, so more agents just slice the same wall into more, smaller
+orders. More agents buy quality (tighter spread, smoother trading,
+more continuous quoting); only more capital buys the ability to absorb
+big orders. For a real venue that is a convenient separation: the
+quality is already demonstrated; the capacity is a funding decision.

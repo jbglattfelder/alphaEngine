@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import csv
 import itertools
+import bisect
 import math
 import os
 import sys
@@ -260,45 +261,55 @@ class Book:
         return self.btc_eps
 
     def _live(self, queue: list[Order]) -> list[Order]:
-        """The orders in `queue` that are still active and above dust."""
-        result = []
-        for o in queue:
-            if o.active and o.give_amt > self.eps_of(o):
-                result.append(o)
-        return result
+        """The live orders of a queue — which is the queue itself.
+
+        INVARIANT (eager purge): every order in self.bids / self.asks is
+        active and above dust. Orders leave the list at the moment they die
+        (_drop) — when cancelled, when fully consumed as a maker, or when a
+        self-trade cancels the stale quote — so no reader ever needs to
+        filter. Kept as a method so external probes keep working."""
+        return queue
+
+    def _drop(self, o: Order) -> None:
+        """Remove a dead order from its queue (identity match) and the ref map."""
+        o.active = False
+        queue = self.bids if o.is_buy else self.asks
+        for k, x in enumerate(queue):
+            if x is o:
+                del queue[k]
+                break
+        self._by_ref.pop(o.oref, None)
 
     # ── views (no side effects) ──────────────────────────────────────────────
     @property
     def best_bid(self) -> Optional[float]:
         """Highest live bid price, or None if the bid side is empty."""
-        live = self._live(self.bids)
-        if not live:
+        if not self.bids:
             return None
-        return max(o.price for o in live)
+        return self.bids[0].price          # sorted: best bid first
 
     @property
     def best_ask(self) -> Optional[float]:
         """Lowest live ask price, or None if the ask side is empty."""
-        live = self._live(self.asks)
-        if not live:
+        if not self.asks:
             return None
-        return min(o.price for o in live)
+        return self.asks[0].price          # sorted: best ask first
 
     def depth_counts(self) -> tuple[int, int]:
         """(number of live bids, number of live asks)."""
-        return len(self._live(self.bids)), len(self._live(self.asks))
+        return len(self.bids), len(self.asks)
 
     def bid_btc(self) -> float:
         """Total live bid volume, BTC-equivalent at each bid's own price."""
         total = 0.0
-        for o in self._live(self.bids):
+        for o in self.bids:
             total += o.give_amt / o.price
         return float(total)
 
     def ask_btc(self) -> float:
         """Total live ask volume in BTC (asks already deliver BTC)."""
         total = 0.0
-        for o in self._live(self.asks):
+        for o in self.asks:
             total += o.give_amt
         return float(total)
 
@@ -306,9 +317,9 @@ class Book:
         """Full book state as (price, btc_size, 'bid'|'ask') rows — for the
         deepest-book diagram in the orderbook plot."""
         rows = []
-        for o in self._live(self.bids):
+        for o in self.bids:
             rows.append((float(o.price), float(o.give_amt / o.price), "bid"))
-        for o in self._live(self.asks):
+        for o in self.asks:
             rows.append((float(o.price), float(o.give_amt), "ask"))
         return rows
 
@@ -317,22 +328,25 @@ class Book:
         """Deactivate the order with this reference (no error if gone)."""
         o = self._by_ref.get(oref)
         if o is not None:
-            o.active = False
+            self._drop(o)
 
     def purge_agent(self, agent_id: str) -> None:
         """Remove every order of a (dead) agent from the book."""
-        for o in self.bids + self.asks:
-            if o.agent_id == agent_id:
-                o.active = False
-        self.bids = self._live(self.bids)
-        self.asks = self._live(self.asks)
+        for o in [x for x in self.bids + self.asks if x.agent_id == agent_id]:
+            self._drop(o)
 
     def _rest(self, o: Order) -> None:
-        """Park the (residual of the) order in its queue as passive depth."""
+        """Park the (residual of the) order in its queue as passive depth.
+
+        INVARIANT (sorted book): self.bids is kept sorted by _bid_sort_key
+        and self.asks by _ask_sort_key at all times — best price first,
+        ties by arrival. Insertion goes through bisect, so no reader or
+        matcher ever needs to sort. (Same total order as the old per-submit
+        sort: (price, oref) has no ties, so the sequences are identical.)"""
         if o.is_buy:
-            self.bids.append(o)
+            bisect.insort(self.bids, o, key=_bid_sort_key)
         else:
-            self.asks.append(o)
+            bisect.insort(self.asks, o, key=_ask_sort_key)
         self._by_ref[o.oref] = o
 
     # ── matching: one side-agnostic loop ─────────────────────────────────────
@@ -358,17 +372,11 @@ class Book:
         if (not o.is_buy) and btc_budget is not None:
             o.give_amt = min(o.give_amt, max(btc_budget, 0.0))
 
-        # the queue we eat from, sorted best-first (stable; ties by oref)
-        if o.is_buy:
-            queue = self.asks
-            queue[:] = self._live(queue)
-            queue.sort(key=_ask_sort_key)
-        else:
-            queue = self.bids
-            queue[:] = self._live(queue)
-            queue.sort(key=_bid_sort_key)
+        # the queue we eat from — kept sorted best-first (see _rest)
+        queue = self.asks if o.is_buy else self.bids
 
         trades: list[Trade] = []
+        dead: list[Order] = []             # makers to drop after the walk
         i = 0
         while o.give_amt > self.eps_of(o) and i < len(queue):
             maker = queue[i]
@@ -387,7 +395,7 @@ class Book:
                 # incoming order expresses newer intent, so the stale quote
                 # is canceled. (Skipping it instead would leave a standing
                 # crossed book for other agents to trade through.)
-                maker.active = False
+                dead.append(maker)
                 i += 1
                 continue
 
@@ -426,12 +434,13 @@ class Book:
             # ═════════════════════════════════════
 
             if maker.give_amt <= self.eps_of(maker):
-                maker.active = False       # maker fully consumed
+                dead.append(maker)         # maker fully consumed
                 i += 1
             maker.sync_size_view()
 
-        # drop consumed makers; rest (or drop) the incoming residual
-        queue[:] = self._live(queue)
+        # drop consumed / self-cancelled makers; rest (or drop) the residual
+        for m in dead:
+            self._drop(m)
         o.sync_size_view()
         if o.give_amt > self.eps_of(o) and rest_residual:
             self._rest(o)
@@ -1515,7 +1524,10 @@ class Simulation:
 
 if __name__ == "__main__":
     import time
+    import gc
+
     t = time.time()
+    gc.disable()
 
     # ---------------- edit these to override defaults ----------------
     N = 2          # agents per side
@@ -1527,6 +1539,7 @@ if __name__ == "__main__":
     SIZE_DIST = "normal"       # block 2d: "fixed"  | "normal"
     SHOW = True               # pop the figures in the IDE (they save either way)
     # --------------------------------------------
+
     cfg = Config(n=N, T=T, seed=SEED, capital_dist=CAPITAL_DIST,
                  band_dist=BAND_DIST, closing=CLOSING, size_dist=SIZE_DIST)
     print(cfg.summary())
