@@ -65,6 +65,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = HERE                      # repo root
 sys.path.insert(0, os.path.join(_ROOT, "helper"))
 OUT = HERE                                   # run outputs land next to the code
+K_REF = 1_000_000.0                          # frozen reference capital; dust
+                                             # thresholds scale as K / K_REF
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -123,8 +125,9 @@ class Config:
     # ── outputs ──────────────────────────────────────────────────────────────
     save_csv: bool = True     # write price_btc_eur_<tag>.csv + trades_<tag>.csv
                               # at run end (sweeps pass False)
-    save_book: bool = True   # every book_stride ticks, snapshot the top
-    book_levels: int = 15     # book_levels price levels per side (price, size)
+    save_book: bool = True    # every book_stride ticks, snapshot the book
+    book_range: float = 0.01  # capture EVERY level within mid*(1 +/- book_range);
+    book_levels: int = 400    # hard cap per side (safety), NaN-padded rows
     book_stride: int = 5      # -> tape_<tag>_book.npz at run end
     save_tapes: bool = True  # write tape_<tag>.npy (tick prices) and
                               # tape_<tag>_events.npz (every print) at run end,
@@ -791,8 +794,12 @@ class Simulation:
     def __init__(self, cfg: Config) -> None:
         self.cfg = cfg
         self.agents = build_agents(cfg)
+        # dust thresholds are wealth-relative: scaled by K / K_REF so that
+        # capital is a pure scale (see validator test 13). At the frozen
+        # reference K they equal the historical absolute values exactly.
+        self.k_scale = cfg.K / K_REF
         self.book = Book(last_price=cfg.x_0,
-                         size_eps=1e-12 / cfg.x_0,   # dust in the model's own units
+                         size_eps=1e-12 / cfg.x_0 * self.k_scale,   # dust, model units
                          x_ref=cfg.x_0)
         self.p = cfg.x_0                  # the recorded price; mirrors book.last_price
         self.t = 0
@@ -971,7 +978,7 @@ class Simulation:
         assert self.cfg.x_min is not None
         if not a.is_long:
             return a.pos_q > 1e-9 * self.cfg.x_min       # EUR still to spend
-        return abs(a.pos_b) > 1e-9 / self.cfg.x_0        # BTC still to deliver
+        return abs(a.pos_b) > 1e-9 / self.cfg.x_0 * self.k_scale   # BTC to deliver
 
     def _settle_if_flat(self, a: Agent) -> None:
         """If the close promise is delivered, the round trip is over: bank
@@ -1045,7 +1052,7 @@ class Simulation:
             # the resting entry kept filling after the TP rested: the
             # position GREW, the TP size is stale -> cancel; it re-rests below
             if (a.tp_ref is not None and not a.closing
-                    and abs(a.pos_b) > abs(a.tp_pos_b) + 1e-9 / cfg.x_0):
+                    and abs(a.pos_b) > abs(a.tp_pos_b) + 1e-9 / cfg.x_0 * self.k_scale):
                 self.book.cancel(a.tp_ref)
                 a.tp_ref = None
 
@@ -1407,15 +1414,28 @@ class Simulation:
         return True
 
     def _snap_book(self) -> None:
-        """Aggregate live resting volume per price level; keep the top
-        cfg.book_levels of each side. Rows: (price, size), NaN-padded."""
+        """Snapshot the book by PRICE RANGE: every level within
+        mid * (1 +/- cfg.book_range), best-first, capped at cfg.book_levels
+        per side (NaN-padded rows of (price, size)). Range capture keeps the
+        recording and any fixed-window display in the same units, so a flat
+        stretch on screen is a real desert, never a truncation artifact.
+        Falls back to the last trade price as center when a side is empty."""
         from collections import defaultdict
         K = self.cfg.book_levels
-        for orders, out, sign in ((self.book.bids, self._book_b, -1),
-                                  (self.book.asks, self._book_a, +1)):
+        bb, ba = self.book.best_bid, self.book.best_ask
+        if bb is not None and ba is not None:
+            mid = 0.5 * (bb + ba)
+        else:
+            mid = self.book.last_price
+        lo = mid * (1.0 - self.cfg.book_range)
+        hi = mid * (1.0 + self.cfg.book_range)
+        for orders, out, sign, plo, phi in (
+                (self.book.bids, self._book_b, -1, lo, mid),
+                (self.book.asks, self._book_a, +1, mid, hi)):
             lv: dict = defaultdict(float)
             for o in self.book._live(orders):
-                lv[o.price] += o.size
+                if plo <= o.price <= phi:
+                    lv[o.price] += o.size
             top = sorted(lv.items(), key=lambda x: sign * x[0])[:K]
             row = np.full((K, 2), np.nan, np.float32)
             for k, (p, s) in enumerate(top):

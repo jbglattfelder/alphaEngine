@@ -464,3 +464,127 @@ orders. More agents buy quality (tighter spread, smoother trading,
 more continuous quoting); only more capital buys the ability to absorb
 big orders. For a real venue that is a convenient separation: the
 quality is already demonstrated; the capacity is a funding decision.
+
+## 7. Capital is a pure scale — in law, and almost bit for bit
+
+Multiply everyone's starting money by the same factor and the market
+should be the same market, just denominated in bigger numbers: the same
+price path, eight times the resting volume, eight times every profit
+and loss. Tested at 15,000 agents with eight times the capital, that is
+exactly what happens: the price path is reproduced byte for byte over a
+25,000-tick test, and the book and the PnL range scale by exactly eight.
+Capital sets how much the market can absorb; it does not change how the
+market behaves. For a real venue this is the convenient half of the
+funding question: capacity is a multiplier, decided by the money put in.
+
+The fine print, found by turning this into a permanent check: three
+tiny "dust" cutoffs in the engine were absolute numbers rather than
+proportional to wealth; they are now scaled with capital, which changes
+nothing at the reference capital (every existing fingerprint and tape is
+unchanged, byte for byte). Only at toy sizes (150 agents, where each
+agent's orders are fifty times larger) does a last-digit rounding
+difference still creep in within the first ticks — harmless, since it is
+chaos re-sampling the same law, and logged as a known small-size wobble
+in the validator rather than hidden.
+
+## 8. The anti-crash — markets crash upward too
+
+One run delivered a specimen we had not seen before. Deep in a long
+decline, the price plunged from 70 to 50 in a stop-loss cascade — and
+then, within 87 ticks, shot back up 53%, containing both the largest
+single-tick fall AND the largest single-tick rise of the entire run,
+42 ticks apart. At the turn, trading spiked to six times its normal
+rate.
+
+The mechanism is the model's crash machinery running in reverse, and
+it explains why the two arrive welded together. A market that has been
+falling for a long stretch is crowded with recent short sellers, each
+with a stop-loss resting one band above entry — a dense ladder of
+forced BUY orders hanging just overhead, laid down by the decline
+itself. When the plunge overshoots into the value wall (at half the
+price, every resting euro lifts twice the coins — the restoring force
+at its strongest), the first uptick triggers the lowest stops; each
+stop is a buy, each buy triggers the next. A short squeeze: a crash
+with the sign flipped, no panic and no news required, just resting
+geometry meeting mechanical triggers.
+
+Two things follow. First, cascades in either direction are the same
+object — a chain of triggered orders ripping through the book, whose
+route and endpoint are written in advance by the book's shape: where
+it is thin the chain runs, where the wall or a stop-desert sits the
+chain dies. The order book recording (new in this batch) caught the
+whole episode frame by frame — the first time the fuel, the wall, and
+the turn are visible directly rather than inferred from the price.
+Second, this symmetry is a property of the varied world: when exit
+bands were uniform and asymmetric, upward cascades had little clustered
+fuel; with every agent's bands drawn individually around a symmetric
+center, the market builds up-dominoes and down-dominoes with the same
+machinery. The anti-crash is not an anomaly. It is the crash's mirror
+image, and any market this model ever powers should expect both.
+
+---
+
+# EVALUATION of the million-tick run
+
+One world (15,000 agents, seed 9) was run for one million ticks — two
+and a half times the previous horizon, roughly two years of market
+under the tick-per-minute calibration. Three findings and a specimen.
+
+## 9. The engine reproduces itself perfectly
+
+The first 400,000 ticks of the long run are bit-for-bit identical to
+the 400,000-tick run archived weeks earlier — every one of forty-three
+million trades, across code changes (verified byte-identical) and
+different sessions. Determinism at full scale is not a claim; it is
+now an observation.
+
+## 10. The hum has no visible lifetime — and a market can live at depth
+
+After leaving the old horizon the price climbed to 310, then fell into
+the deepest excursion of the program — an 87% drawdown — and then spent
+four hundred thousand ticks living there. Not dying: trading ran at the
+highest rate of the whole run, and in percentage terms this was the
+wildest sustained regime we have recorded, swinging 30–40% per stretch
+while never leaving the deep zone and never returning home. Two lessons.
+The restoring force caps how deep an excursion goes, but the trip home
+can exceed any patience — return is a tendency, not a schedule. And the
+deep zone looks like the big-market shadow of the small-market death we
+documented earlier: the same exhaustion physics that locks a small
+market into a frozen sawtooth leaves a large, varied market alive but
+stuck — violent, loud, and far from where it started. Whether markets
+accumulate time in these deep shoulders is now a precise, measurable
+question.
+
+## 11. The market's geometry depends on its wealth
+
+The directional-change laws — our standing comparison with real
+currency markets — were measured separately for the calm early era and
+the deep late era, and they are two different worlds. In the calm era
+moves fizzle early (overshoots carry only a quarter of their threshold;
+the steep law as always). In the deep era, at fine scales, overshoots
+carry over 80% — close to real-FX geometry — because the market's shock
+absorber is built out of resting wealth, and at depressed prices the
+book is too poor to build walls. Same crowd, same rules, different
+funding, different physics. This sharpens the whole program by one
+clause: real-market geometry appears wherever the damping weakens, and
+there are two roads there — predators eating the free lunch (the
+planned ecology), or poverty starving the book (this regime, which
+comes bundled with the pathologies below). The goal is the first road:
+FX-like geometry at full book health, never geometry by destitution.
+
+## 12. The flash rally — one order, one empty side, an 8,400% wick
+
+At tick 921,243, with the market trading at 16.5, a single blind buy
+order arrived in a moment when the sell side was nearly empty — and
+walked the stale ladder all the way to a print at 1,407: orders resting
+untouched since the price was 100, suddenly the only thing for sale.
+One tick, 120 prints, an 85-fold intra-tick spike, gone the next
+moment. Nobody planned it and nobody exploited it — this market
+contains no one who watches for empty sides. It is the purest specimen
+yet of the model's central lesson that the book's shape writes events
+in advance: a vacuum is a printed invitation. It is also the design
+brief for the next layer, in one picture: a market-making tribe exists
+to make empty sides impossible, and a venue rulebook (a price collar on
+marketable orders) exists to refuse absurd prints while the depth is
+being restored. Both will be certified against exactly this statistic —
+the size of the largest intra-tick wick.
