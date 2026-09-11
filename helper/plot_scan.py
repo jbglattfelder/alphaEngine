@@ -43,7 +43,7 @@ def _default_in() -> str:
 
 SCAN = "blocks"          # which family's results to read (see docstring)
 
-FROZEN_DEFAULT = "PFCF"  # highlighted in blocks figures
+FROZEN_DEFAULT = "NNNN"  # highlighted in blocks figures
 
 
 def group_of(r: dict) -> str:
@@ -80,22 +80,30 @@ def _order_key(code: str) -> tuple:
 
 
 def _label(code: str) -> str:
-    """Panel title: family labels pass through; blocks arm codes get their
-    knob spelling, with the frozen default marked."""
+    """Panel title: family labels pass through; blocks arm codes get a
+    compact knob spelling on a second line, with the frozen default
+    marked. Kept short so 4-across panels never collide."""
     if len(code) != 4 or any(c not in "PNFC" for c in code):
         return code                       # a family label, not an arm code
-    parts = [f"cap={'pareto' if code[0] == 'P' else 'normal'}",
-             f"band={'fixed' if code[1] == 'F' else 'normal'}",
-             f"close={'clock' if code[2] == 'C' else 'normal'}",
-             f"size={'fixed' if code[3] == 'F' else 'normal'}"]
-    tagline = f"{code}  ({', '.join(parts)})"
-    if code == FROZEN_DEFAULT:
-        tagline += "  — the frozen default"
-    return tagline
+    parts = [("pareto" if code[0] == "P" else "normal"),
+             ("fixed" if code[1] == "F" else "normal"),
+             ("clock" if code[2] == "C" else "normal"),
+             ("fixed" if code[3] == "F" else "normal")]
+    head = code + ("  (frozen default)" if code == FROZEN_DEFAULT else "")
+    return f"{head}\ncap {parts[0]} · band {parts[1]} · close {parts[2]} · size {parts[3]}"
+
+
+def _kticks(ax, T: int) -> None:
+    """Tick axis in thousands so eight-digit labels don't overlap."""
+    from matplotlib.ticker import FuncFormatter, MaxNLocator
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=5, integer=True))
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: "0" if v == 0 else f"{v/1e3:g}k"))
+    ax.set_xlim(0, T)
 
 
 ARM_ORDER = _all_codes()
-SEED_COLORS = ["#2563EB", "#C2680A", "#15803D", "#7C3AED", "#DB2777", "#0891B2"]
+SEED_COLORS = ["#2563EB", "#C2680A", "#15803D", "#7C3AED", "#DB2777", "#0891B2",
+               "#B45309", "#4B5563", "#65A30D", "#BE123C"]
 
 
 def load_rows(path: Optional[str] = None) -> list[dict]:
@@ -212,10 +220,11 @@ def plot_prices(rows: list[dict], save_path: str, show: bool = False) -> str:
                 label = f"seed {r['seed']}"
             ax.plot(x, lnp, lw=0.9, color=color, label=label)
         bold = arm == FROZEN_DEFAULT
-        ax.set_title(_label(arm), fontsize=9,
+        ax.set_title(_label(arm), fontsize=8.5,
                      fontweight="bold" if bold else "normal")
         ax.set_ylim(-y_max, y_max)
         ax.grid(True, ls=":", alpha=0.35)
+        _kticks(ax, T)
     for ax in axes.flat[len(arms):]:
         ax.set_visible(False)
     for ax in axes[-1]:
@@ -224,8 +233,10 @@ def plot_prices(rows: list[dict], save_path: str, show: bool = False) -> str:
         row_axes[0].set_ylabel("ln(p / x_0)")
     handles, labels = axes[0, 0].get_legend_handles_labels()
     seen = dict(zip(labels, handles))          # dedupe repeated sweep labels
-    axes[0, 0].legend(seen.values(), seen.keys(), fontsize=7, frameon=False)
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.legend(seen.values(), seen.keys(), loc="lower center",
+               ncol=min(len(seen), 10), fontsize=8, frameon=False,
+               bbox_to_anchor=(0.5, 0.0))
+    fig.tight_layout(rect=(0, 0.04, 1, 0.95))
     fig.savefig(save_path, dpi=130, bbox_inches="tight")
     print(f"wrote {save_path}")
     if show:
@@ -297,7 +308,7 @@ def plot_stats(rows: list[dict], save_path: str, show: bool = False) -> str:
             ax.axhline(ref, color="#9CA3AF", lw=1.0, ls="--",
                        label={-2.0: "BM theory −2", 1.0: "BM ⟨ω⟩=δ",
                               0.0: "0"}[ref])
-            ax.legend(fontsize=7, frameon=False)
+            ax.legend(fontsize=7, frameon=False, loc="upper right")
         if scale == "log":
             ax.set_yscale("log")
         ax.set_xticks(range(len(arms)))

@@ -39,6 +39,12 @@ census, wall witnesses, stylized facts, DC scaling); family rows add
 "label" and the varied parameters as "x_<name>" fields. Non-blocks scans
 print a per-label verdict table at the end. plot_scan.py reads the
 blocks results; family results are small enough to read from the table.
+
+USAGE (distributed):
+>python scan_simulation_mvp.py --seeds 9,17,42     --out scan_results_a.jsonl
+>python scan_simulation_mvp.py --seeds 201,202,204 --out scan_results_b.jsonl
+>cat eval/scans/scan_results_a.jsonl eval/scans/scan_results_b.jsonl > eval/scans/scan_results.jsonl
+>python helper/plot_scan.py
 """
 
 from __future__ import annotations
@@ -194,8 +200,8 @@ def tooth_stats(prices, x_0, t_lock, delta=0.5):
 # ---------------- edit these ----------------
 # ── scan settings (shared by every family) ──────────────────────────────────
 N = 500
-T = 50_000
-SEEDS = (9, 17, 42, 201, 202)
+T = 150_000
+SEEDS = (9, 17, 42, 201, 202, 204)
                         # wealth multiset (capital_mirror) — dice 1 neutralized,
                         # direction becomes fair-coin across seeds. False: the
                         # realistic null (independent deals; direction is
@@ -206,7 +212,7 @@ BAND_SEEDS = (None,)   # extra runs per arm that re-roll ONLY the per-agent
                        # size draws. Fixed-band arms ignore it — leave (None,)
                        # unless sweeping, e.g. (None, 1, 2, 3).
 # ── which scan family to run ─────────────────────────────────────────────────
-SCAN = "peaky"   # "blocks" — all 16 knob combinations (the classic scan)
+SCAN = "blocks"  # "blocks" — all 16 knob combinations (the classic scan)
                   # "bands"  — NFNN with asymmetric exit bands: sl>tp, sl=tp, tp>sl
                   # "peaky"  — each knob's "normal" arm with cv -> 0.01: the
                   #            degenerate N should reproduce its fixed/clock
@@ -387,4 +393,20 @@ def _family_summary() -> None:
 
 
 if __name__ == "__main__":
+    # Optional overrides for splitting a long scan across cores/terminals:
+    #   python scan_simulation_mvp.py --seeds 9,17,42 --out scan_results_a.jsonl
+    #   python scan_simulation_mvp.py --seeds 201,202,204 --out scan_results_b.jsonl
+    # then:  cat eval/scans/scan_results_a.jsonl eval/scans/scan_results_b.jsonl \
+    #            > eval/scans/scan_results.jsonl   and   python helper/plot_scan.py
+    _a = sys.argv[1:]
+    while _a:
+        if _a[0] == "--seeds":
+            SEEDS = tuple(int(x) for x in _a[1].split(","))
+            _a = _a[2:]
+        elif _a[0] == "--out":
+            RESULTS = os.path.join(OUT, _a[1])
+            _a = _a[2:]
+        else:
+            raise SystemExit(f"unrecognised argument {_a[0]!r}: "
+                             "usage: --seeds 9,17 --out file.jsonl")
     main()
