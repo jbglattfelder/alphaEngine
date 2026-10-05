@@ -107,6 +107,24 @@ them as they are.
 
 ## 5. Scan and figures
 
+- **Overshoot convention.** `helper/dc_analysis.py` (the in-run scaling
+  figures) measures the overshoot from the DC *confirmation print*, as in
+  Glattfelder et al. (2011). `helper/dcos.py` as first committed measured
+  it from the *threshold level* (previous extreme ± δ), which adds the
+  confirming print's excess over the threshold. On fine data the two
+  coincide; on this model's coarse prints they differ below the exit band
+  (at δ = 0.4 % on the n=7,500 NNNN seed-9 tape: 0.69 δ vs 0.29 δ, the
+  difference being a DC excess of 0.40 δ) and agree above it (δ ≥ 1.3 %:
+  ⟨ω⟩ ≈ 0.45 δ either way). `dcos.py` now uses the 2011 convention and
+  reports the DC excess as its own column; the paper's above-band
+  overshoot figure is unaffected, its sub-band values and the "⟨ω⟩ ≈ δ in
+  the collapse eras" remark were the threshold-level numbers (under the
+  2011 convention those eras give 0.3–0.85 δ with a DC excess of up to
+  1.75 δ).
+- The DC count exponent depends on the fit range because the count law
+  has a knee at the exit-band scale (E_N ≈ −0.4 below the band floor,
+  ≈ −2.7 locally above the band, ≈ −3.5 over 0.4–5 %, ≈ −1.8 over the
+  full range). Quote exponents with their range.
 - The scan fits DC laws without a truncation guard; the figures use
   `trunc_frac=0.125`. Scan `E_N` and ⟨ω⟩/δ are therefore not comparable
   with the figures.

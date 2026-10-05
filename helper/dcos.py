@@ -2,8 +2,10 @@
 dcos.py — directional-change (DC) and overshoot (OS) statistics in event time.
 
 Counts, for each threshold δ, how often a log-price series reverses by δ
-from its last extreme (the DC count N(δ)) and how far each move ran past
-the threshold before reversing (the overshoot ω). On Brownian motion
+from its last extreme (the DC count N(δ)) and how far each move ran on
+after the reversal was confirmed (the overshoot ω, measured from the
+confirming print as in Glattfelder et al. 2011; the confirming print's own
+excess over the threshold level is reported separately). On Brownian motion
 N ∝ δ^-2 and ⟨ω⟩ = δ; FX gives N ∝ δ^-1.75 and ⟨ω⟩ ≈ δ
 (Guillaume et al. 1997, Glattfelder et al. 2011).
 
@@ -41,11 +43,16 @@ def dc_os(lp, d):
     mode -1: last DC was down (tracking the running min, waiting for a rise of d)
     mode  0: start — track both until one side has moved d.
 
-    Returns (n_dc, sum_os, n_os, os_values). The overshoot of a segment is
-    the total move from the DC that opened it to the extreme that closed it,
-    minus d."""
-    hi = lp[0]; lo = lp[0]; ref = lp[0]; mode = 0; n = 0
-    os_sum = 0.0; os_n = 0
+    Returns (n_dc, sum_os, n_os, os_values, sum_dc_excess).
+    The overshoot of a segment is measured from the DC CONFIRMATION PRICE
+    (the print that completed the move of d from the extreme) to the
+    extreme that closed the segment — the Glattfelder et al. (2011)
+    convention, the one FX laws are stated in. The confirming print itself
+    usually lies beyond the threshold level ext*e^d; that DC EXCESS is
+    returned separately (total move = d + excess + overshoot). On fine
+    data the excess is ~0; on coarse prints it is not."""
+    hi = lp[0]; lo = lp[0]; ref = lp[0]; conf = lp[0]; mode = 0; n = 0
+    os_sum = 0.0; os_n = 0; exc_sum = 0.0
     os_vals = np.empty(len(lp) // 2 + 1)
     for i in range(len(lp)):
         x = lp[i]
@@ -53,36 +60,39 @@ def dc_os(lp, d):
             if x > hi: hi = x
             if x < lo: lo = x
             if hi - x >= d:
-                mode = -1; ref = hi; lo = x; n += 1
+                mode = -1; ref = hi; conf = x; lo = x; n += 1
             elif x - lo >= d:
-                mode = 1; ref = lo; hi = x; n += 1
+                mode = 1; ref = lo; conf = x; hi = x; n += 1
         elif mode == 1:
             if x > hi: hi = x
             if hi - x >= d:
-                o = hi - ref - d; os_vals[os_n] = o; os_sum += o; os_n += 1
-                mode = -1; ref = hi; lo = x; n += 1
+                o = hi - conf; os_vals[os_n] = o; os_sum += o; os_n += 1
+                exc_sum += (conf - ref) - d
+                mode = -1; ref = hi; conf = x; lo = x; n += 1
         else:
             if x < lo: lo = x
             if x - lo >= d:
-                o = ref - lo - d; os_vals[os_n] = o; os_sum += o; os_n += 1
-                mode = 1; ref = lo; hi = x; n += 1
-    return n, os_sum, os_n, os_vals[:os_n]
+                o = conf - lo; os_vals[os_n] = o; os_sum += o; os_n += 1
+                exc_sum += (ref - conf) - d
+                mode = 1; ref = lo; conf = x; hi = x; n += 1
+    return n, os_sum, os_n, os_vals[:os_n], exc_sum
 
 
 def analyse(lp: np.ndarray, deltas: np.ndarray, nmin: int = 100) -> dict:
-    N = []; Om = []; Omed = []
+    N = []; Om = []; Omed = []; Ex = []
     for d in deltas:
-        n, s, k, ov = dc_os(lp, float(d))
+        n, s, k, ov, ex = dc_os(lp, float(d))
         N.append(n); Om.append(s / k / d if k else np.nan)
         Omed.append(float(np.median(ov)) / d if k else np.nan)
-    N = np.array(N, float); Om = np.array(Om); Omed = np.array(Omed)
+        Ex.append(ex / k / d if k else np.nan)
+    N = np.array(N, float); Om = np.array(Om); Omed = np.array(Omed); Ex = np.array(Ex)
     sel = N >= nmin
     if sel.sum() >= 3:
         slope, icpt = np.polyfit(np.log(deltas[sel]), np.log(N[sel]), 1)
         r2 = np.corrcoef(np.log(deltas[sel]), np.log(N[sel]))[0, 1] ** 2
     else:
         slope = icpt = r2 = np.nan
-    return dict(delta=deltas, N=N, os_mean=Om, os_median=Omed,
+    return dict(delta=deltas, N=N, os_mean=Om, os_median=Omed, dc_excess=Ex,
                 E_N=slope, R2=r2, fit_mask=sel,
                 local_slope=np.diff(np.log(np.maximum(N, 1))) / np.diff(np.log(deltas)))
 
@@ -94,6 +104,7 @@ def report(res: dict, label: str, n_points: int) -> None:
     print('  N_DC      :', ' '.join(f'{int(n):7d}' for n in res['N']))
     print('  ⟨ω⟩/δ     :', ' '.join(f'{o:7.2f}' for o in res['os_mean']))
     print('  median ω/δ:', ' '.join(f'{o:7.2f}' for o in res['os_median']))
+    print('  DC excess/δ:', ' '.join(f'{o:7.2f}' for o in res['dc_excess']), '  (confirming print beyond ext·e^δ)')
     print('  local E_N :', '        ' + ' '.join(f'{s:7.2f}' for s in res['local_slope']))
     m = res['fit_mask']
     print(f"  OLS over N>={int(res['N'][m].min()) if m.any() else '-'} ({m.sum()} points, "
@@ -107,7 +118,7 @@ def selftest() -> None:
     res = analyse(b, np.geomspace(0.005, 0.04, 6), nmin=100)
     report(res, 'Brownian motion (expect E_N ≈ -2, ⟨ω⟩/δ ≈ 1)', len(b))
     x = 0.1 * np.sin(np.linspace(0, 20 * np.pi, 100_000))
-    n, s, k, _ = dc_os(x, 0.05)
+    n, s, k, _, _ = dc_os(x, 0.05)
     print(f'sine, amplitude 0.1, 10 periods, δ=0.05: {n} DCs (expect 20–21), ⟨ω⟩/δ = {s/k/0.05:.2f} (expect ≈ 2.9)')
 
 
