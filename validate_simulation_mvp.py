@@ -1,5 +1,5 @@
 """
-validate_simulation_mvp.py — 12 tests that the frozen null is healthy.
+validate_simulation_mvp.py — 13 checks that the frozen null is healthy (the 13th is a warning).
 
 Run from anywhere:  python validate_simulation_mvp.py      (~30 s)
 
@@ -10,7 +10,7 @@ identities, the clean-market guarantees (no self-trades, no degenerate
 quotes, no crossed books), ledger closure, file integrity, and the
 cross-machine decimal invariant.
 
-Exit code 0 = all 12 pass. Any failure prints what broke and exits 1.
+Exit code 0 = all 12 counted checks pass (check 13 is reported, not counted). Any failure prints what broke and exits 1.
 """
 
 from __future__ import annotations

@@ -1,0 +1,4 @@
+# Python >= 3.11 (simulation_mvp.py uses typing.Self)
+numpy>=1.26
+matplotlib>=3.6
+pandas>=2.0        # helper/agent_pnl_mvp.py only

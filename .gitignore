@@ -9,4 +9,11 @@ tmp/
 *.npz
 *.sh
 *.npy
-*.jsonl
+# run outputs the engine writes next to simulation_mvp.py (repo root)
+/log_*.txt
+/price_btc_eur_*.csv
+/trades_*.csv
+/dashboard_*.png
+/orderbook_*.png
+/scaling_laws_*.png
+/stylized_facts_*.png

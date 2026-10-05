@@ -1,6 +1,27 @@
-# EVALUATION of NFNN — what the null model does, and why
+# EVALUATION of the null model — what it does, and why
 
-See results of n=150 in `bench/` and n=5,000 in `runs/`.
+See results of n=150 in `bench/` and n=5,000 / n=7,500 in `runs/`. The
+figures in `bench/` and `runs/` are all **NNNN** (tag
+`cap-normal_band-normal_close-normal_size-normal`), the reference arm.
+
+> **Read with these corrections (audit, October 2026; see
+> `../KNOWN_ISSUES.md`).** This log is kept as written.
+> - The original title said "NFNN". Some numbers below come from earlier
+>   arms or from the archived engine: the §3 RANGE/TREND table (E_N −1.67,
+>   ⟨ω⟩/δ 0.946) matches `dev/null_model/EVALUATION.md` Addendum 4, an NFNN
+>   run on the archived engine, not the NNNN figures beside it.
+> - "On the FX overshoot law" (summary, §3, §4) is superseded by the
+>   n=7,500 runs: in the calm regime moves fall short, ⟨ω⟩/δ ≈ 0.3–0.5 and
+>   N(δ) ∝ δ^−3.5. The FX-like values appear only in segments that contain
+>   a collapse or the post-collapse sawtooth.
+> - The scan section says "8 seeds, 128 runs"; `scan_simulation_mvp.py`
+>   has 6 seeds (96 runs). There is no "block 2e" in the code.
+> - "Median spread ~0.05%" predates the n=7,500 runs (paper: 0.02–0.04%).
+> - "Wins 87%" was measured with fills at the signal print itself, which
+>   no agent outside the tick can obtain. With fills one tick later the
+>   edge is zero; with fills one print later it is ≈ +10 bp at a ≈ 30% hit
+>   rate (n=7,500, seed 9). Read 87% as the at-print upper bound.
+> - No section records a prediction made before its run.
 
 Agents with zero intelligence produce a market that looks remarkably like the real thing. We built a sealed toy economy — a few thousand identical robots trading two currencies through an order book, each following one dumb rule: wake on a timer (normal), open a trade with size s (N), take profit at +tp% or bail at −sl% (F), exit if nothing happens (N). No news, no beliefs, no strategy. Yet out come bubbles, short squeezes, crashes, and long trends; unpredictable prices whose calm and turbulent spells cluster the way real markets' do; rare extreme jumps at fine time scales that smooth into a bell curve when you zoom out; and, on its own trading-activity clock, the same quantitative "overshoot" law that has been measured in real foreign-exchange data. Small markets even develop their own signature pathology — the run's lucky winners become whales whose recycled wealth drives an endless slow-bleed-and-snap-back sawtooth, which melts away once the crowd is large enough. The sobering conclusion cuts both ways: none of these famous market patterns, on their own, is evidence that anyone in the market knows anything — and whatever genuine intelligence contributes to real markets, it must be found in what this mindless machine cannot do.
 

@@ -7,8 +7,8 @@
         "dev",
         "eval",
         "__pycache__",
-        "NULL",
         ".venv",
         "**/node_modules"
-    ]
+    ],
+    "pythonVersion": "3.11"
 }
