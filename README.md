@@ -165,7 +165,7 @@ the event tape only.
 | `plot_price.py` | price-path figure from a saved tape |
 | `audit_exploit.py` | paper-trades contrarian (DC-fade) and momentum strategies on an event tape. **Fills at the signal print — an upper bound, not a tradeable result; see `KNOWN_ISSUES.md`** |
 | `audit_impact.py` | injects external market orders and measures impact and decay. **Broken in this version; see `KNOWN_ISSUES.md`** |
-| `run_experiments_mvp.py` | replays the level-0 experiment ledger (exp1–exp6) on the **archived** engine in `dev/null_model/`. **Does not run in this version; see `KNOWN_ISSUES.md`** |
+| `run_experiments_mvp.py` | replays the level-0 experiment ledger (exp1–exp6). It needs the **archived predecessor engine**, which was removed from the tree at the freeze (it is in the git history before commit `1c6865f`, under `dev/null_model/`). **Does not run in this version; see `KNOWN_ISSUES.md`** |
 | `agent_pnl_mvp.py` | per-agent PnL ledgers from full two-sided fills (balance-sheet b/q accounting). **Marks each ledger at the agent's own last fill, so its Σp is not exactly zero; see `KNOWN_ISSUES.md`** |
 
 ## 6. Directory structure
@@ -180,19 +180,20 @@ the event tape only.
 │   └── validate/     under construction: spreadsheet-level analysis of
 │                     individual agent behavior
 └── dev/              legacy and research ARCHIVE — read, don't run
-    ├── explore/      initial R&D (the original engine, experiments, figures)
-    └── null_model/   the frozen predecessor of /, with its full history
+    └── explore/      initial R&D (the original engine, experiments, figures)
 ```
 
 ## 7. A note on `dev/`
 
-The archive is the project's memory, and it is deliberately preserved: how
-this model was found, debugged, validated bit-for-bit against its legacy
-implementation, and experimentally mapped is documented in
-**`dev/explore/FINDINGS-master.md`** and **`dev/explore/HANDOFF-master.md`**
-(the original engine's bug hunts and retractions), and in
-**`dev/null_model/EVALUATION.md`** (the six experiments exp1–exp6 and the
-frozen predecessor's own record). The archive's longest story is the
+The archive is the project's memory: how this model was found, debugged,
+validated bit-for-bit against its legacy implementation, and
+experimentally mapped is documented in **`dev/explore/FINDINGS-master.md`**
+and **`dev/explore/HANDOFF-master.md`** (the original engine's bug hunts and
+retractions). The intermediate stage — the frozen predecessor of the root
+engine, with its own `EVALUATION.md`, the six experiments exp1–exp6 and the
+bit-equality proof against the legacy code — lived in `dev/null_model/` and
+was removed from the tree at the freeze; it remains in the git history
+before commit `1c6865f`. The archive's longest story is the
 **symmetry chase**: run after run pinned in one direction, and the question
 was whether the engine secretly favors a side. The hunt went through a dual
 line-by-line audit of every side-conditional, a mirrored-capital test (both

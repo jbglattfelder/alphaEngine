@@ -60,14 +60,16 @@ covered by a fingerprint in this version.
   n=2 T=100k run against an assert of < 1e-4). PnL is in EUR, not X.
 - `helper/run_experiments_mvp.py` crashes on import (`sys.path` is set
   after the import) and would load the root engine rather than the
-  archived one it needs.
+  archived predecessor it needs — which was removed from the tree at the
+  freeze (git history before `1c6865f`, `dev/null_model/`).
 - Nothing in this version computes the median spread quoted in the paper
   (0.02–0.04% at n=7,500); the docs' older "~0.05%" is from n=5,000.
 - `helper/stylized_facts_mvp.py` and `helper/plots_from_tape.py` use two
   different ACF estimators; the "per-tick" kurtosis in `plots_from_tape`
   is computed on fixed blocks of ⌈prints/ticks⌉ prints, not on ticks.
 - `eval/validate/agent_pnl_mvp.py` and `eval/validate/verify_mvp.py` are
-  stale copies of `dev/null_model/*` and do not run on the root engine.
+  stale copies from the removed predecessor and do not run on the root
+  engine.
 
 ## 4. Engine details the paper describes differently
 
@@ -117,10 +119,6 @@ them as they are.
 
 ## 6. Repo hygiene
 
-- `dev/null_model/bench/` contains a 95.6 MB log.
 - `eval/validate/` holds unreferenced `.xls` files.
-- `dev/` holds identical copies of `dc_analysis` and `dashboard`.
 - `.gitignore`'s `.*/` also hides `.github/`.
-- `dev/null_model` docs reference a `NULL/` directory that no longer
-  exists; its `verify/verify_mvp.py` cannot run in the current layout.
 - Inconsistent names in `eval/runs/` (`-T1m` vs `_T1m`, `venu_sim`).

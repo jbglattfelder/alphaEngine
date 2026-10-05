@@ -8,8 +8,9 @@ figures in `bench/` and `runs/` are all **NNNN** (tag
 > `../KNOWN_ISSUES.md`).** This log is kept as written.
 > - The original title said "NFNN". Some numbers below come from earlier
 >   arms or from the archived engine: the §3 RANGE/TREND table (E_N −1.67,
->   ⟨ω⟩/δ 0.946) matches `dev/null_model/EVALUATION.md` Addendum 4, an NFNN
->   run on the archived engine, not the NNNN figures beside it.
+>   ⟨ω⟩/δ 0.946) matches Addendum 4 of the removed predecessor's EVALUATION.md
+>   (git history before `1c6865f`, `dev/null_model/`), an NFNN run on the
+>   archived engine, not the NNNN figures beside it.
 > - "On the FX overshoot law" (summary, §3, §4) is superseded by the
 >   n=7,500 runs: in the calm regime moves fall short, ⟨ω⟩/δ ≈ 0.3–0.5 and
 >   N(δ) ∝ δ^−3.5. The FX-like values appear only in segments that contain

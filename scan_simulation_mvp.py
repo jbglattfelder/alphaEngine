@@ -34,44 +34,6 @@ family:
   "qsweep"  NFNN with the order fraction q in {2, 4, 8, 16, 32}: from
             half-the-wealth bites to slivers. -> scan_results_qsweep.jsonl
 
-  "intrinsic"
-            The intrinsic-time arms against the NNNN null. Two knobs accept
-            the letter I: capital_dist="intrinsic" is the normal capital
-            draw plus an ENTRY clock that accrues pressure per own
-            directional-change event instead of per tick; closing=
-            "intrinsic" makes the TIME-OUT fire after a drawn number of own
-            events since open. Exit bands are untouched. Each agent's event
-            threshold is drawn per it_dist. Eight arms, each differing from
-            NNNN in exactly one thing:
-                NNNN            the anchor (tick clock everywhere)
-                INNN_normal     intrinsic entry clock,   thresholds N(0.01, 0.3)
-                NNIN_normal     intrinsic time-out,      thresholds N(0.01, 0.3)
-                ININ_normal     both,                    thresholds N(0.01, 0.3)
-                INNN_pareto     intrinsic entry clock,   thresholds Pareto(alpha 1.5)
-                NNIN_pareto     intrinsic time-out,      thresholds Pareto
-                ININ_pareto     both,                    thresholds Pareto
-                INNN_fixed      the knife-edge control: every agent has the
-                NNIN_fixed      SAME threshold, so every clock advances on the
-                ININ_fixed      same moves (prediction: phase-locking)
-                INII_normal     the complete intrinsic-time null: entry clock,
-                INII_pareto     time-out and ORDER SIZE in own events. The tick
-                                null gives every agent equal volume per tick;
-                                size_dist="intrinsic" gives equal volume per
-                                event (order fraction ∝ delta_it), so agents
-                                acting on small moves trade small.
-            Two settings to know about. it_ticks_per_event calibrates the
-            pressure per event so that, in the calm NNNN regime at this N,
-            an intrinsic-clocked agent fires as often as a tick-clocked one
-            (measure ticks per 1% event — directional changes AND overshoot
-            ticks — on an NNNN tape at the scan's N and set it; see
-            helper/it_calibrate.py). it_floor_frac is a
-            small per-tick pressure added regardless of events; at zero,
-            pure intrinsic time cannot even start (no trade, no event, no
-            clock, no trade). Rows add acf_act_L{1,10,100}: autocorrelation
-            of the traded-this-tick indicator — activity clustering, the
-            stylized fact the tick-clocked null lacks and these arms are
-            predicted to produce.       -> scan_results_intrinsic.jsonl
-
 Every row carries the standard measurements (drift, lock time, tooth
 census, wall witnesses, stylized facts, DC scaling); family rows add
 "label" and the varied parameters as "x_<name>" fields. Non-blocks scans
@@ -257,13 +219,6 @@ SCAN = "blocks"  # "blocks" — all 16 knob combinations (the classic scan)
                   #            sibling. (Capital has no fixed sibling: its
                   #            peaky-N is the all-agents-equal world.)
                   # "qsweep" — NFNN with the order fraction q varied
-                  # "intrinsic" — the intrinsic-time arms against NNNN:
-                  #            INNN (entry clock in own events), NNIN (time-out
-                  #            in own events), ININ (both), each with event
-                  #            thresholds drawn "normal" and "pareto", plus two
-                  #            controls: NNNN itself and INNN with "fixed"
-                  #            thresholds (the knife edge: every clock advances
-                  #            on the same moves)
 
 RESULTS = os.path.join(OUT, "scan_results.jsonl" if SCAN == "blocks"
                        else f"scan_results_{SCAN}.jsonl")
@@ -292,22 +247,6 @@ FAMILIES: dict = {
     "qsweep": [
         (f"q{q}", NFNN, dict(q=q)) for q in (2, 4, 8, 16, 32)
     ],
-    "intrinsic": [
-        ("NNNN",        ("normal",    "normal", "normal",    "normal"), {}),
-        ("INNN_normal", ("intrinsic", "normal", "normal",    "normal"), dict(it_dist="normal")),
-        ("NNIN_normal", ("normal",    "normal", "intrinsic", "normal"), dict(it_dist="normal")),
-        ("ININ_normal", ("intrinsic", "normal", "intrinsic", "normal"), dict(it_dist="normal")),
-        ("INNN_pareto", ("intrinsic", "normal", "normal",    "normal"), dict(it_dist="pareto")),
-        ("NNIN_pareto", ("normal",    "normal", "intrinsic", "normal"), dict(it_dist="pareto")),
-        ("ININ_pareto", ("intrinsic", "normal", "intrinsic", "normal"), dict(it_dist="pareto")),
-        ("INNN_fixed",  ("intrinsic", "normal", "normal",    "normal"), dict(it_dist="fixed")),
-        ("NNIN_fixed",  ("normal",    "normal", "intrinsic", "normal"), dict(it_dist="fixed")),
-        ("ININ_fixed",  ("intrinsic", "normal", "intrinsic", "normal"), dict(it_dist="fixed")),
-        # the complete intrinsic-time null: entry clock, time-out AND order
-        # size in the agent's own time (equal throughput per event)
-        ("INII_normal", ("intrinsic", "normal", "intrinsic", "intrinsic"), dict(it_dist="normal")),
-        ("INII_pareto", ("intrinsic", "normal", "intrinsic", "intrinsic"), dict(it_dist="pareto")),
-    ],
 }
 # --------------------------------------------
 
@@ -320,20 +259,11 @@ ARMS = list(itertools.product(("pareto", "normal"),
 def arm_code(cap: str, band: str, close: str, size: str) -> str:
     """Four-letter arm code, e.g. PFCF (legacy null), NFNF (current
     default), NNNN (all switched)."""
-    a = {"pareto": "P", "normal": "N", "intrinsic": "I"}[cap]
-    b = {"fixed": "F", "normal": "N", "pareto": "P"}[band]
-    c = {"clock": "C", "normal": "N", "intrinsic": "I"}[close]
-    d = {"fixed": "F", "normal": "N", "intrinsic": "I"}[size]
+    a = "P" if cap == "pareto" else "N"
+    b = "F" if band == "fixed" else "N"
+    c = "C" if close == "clock" else "N"
+    d = "F" if size == "fixed" else "N"
     return a + b + c + d
-
-
-def _acf_indicator(p, lag: int) -> float:
-    """Autocorrelation at `lag` of the traded-this-tick indicator (r != 0)."""
-    ind = (np.diff(np.asarray(p, dtype=float)) != 0).astype(float)
-    if ind.std() == 0 or len(ind) <= lag:
-        return float("nan")
-    a, b = ind[:-lag], ind[lag:]
-    return float(np.corrcoef(a, b)[0, 1])
 
 
 def run_one(cap: str, band: str, close: str, size: str, seed: int,
@@ -368,10 +298,6 @@ def run_one(cap: str, band: str, close: str, size: str, seed: int,
         "acf_abs_L100": float(F["acf_abs"][5]),
         "kurt_m1": F["kurt"][1],
         "kurt_m125": F["kurt"][125],
-        # activity clustering: autocorrelation of the "this tick traded"
-        # indicator — the stylized fact the tick-clocked null lacks and the
-        # intrinsic-time arms are predicted to produce
-        **{f"acf_act_L{L}": _acf_indicator(p, L) for L in (1, 10, 100)},
         "alive_frac": (sim.rec_alive_long[-1] + sim.rec_alive_short[-1]) / (2 * N),
         "n_trades": len(sim.trades_log),
         # coarse price path for the panel figure (500 points is plenty)

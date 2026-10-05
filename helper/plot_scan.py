@@ -83,12 +83,12 @@ def _label(code: str) -> str:
     """Panel title: family labels pass through; blocks arm codes get a
     compact knob spelling on a second line, with the frozen default
     marked. Kept short so 4-across panels never collide."""
-    if len(code) != 4 or any(c not in "PNFCI" for c in code):
+    if len(code) != 4 or any(c not in "PNFC" for c in code):
         return code                       # a family label, not an arm code
-    parts = [{"P": "pareto", "N": "normal", "I": "intrinsic"}[code[0]],
-             {"F": "fixed", "N": "normal", "P": "pareto"}[code[1]],
-             {"C": "clock", "N": "normal", "I": "intrinsic"}[code[2]],
-             {"F": "fixed", "N": "normal", "I": "intrinsic"}[code[3]]]
+    parts = [("pareto" if code[0] == "P" else "normal"),
+             ("fixed" if code[1] == "F" else "normal"),
+             ("clock" if code[2] == "C" else "normal"),
+             ("fixed" if code[3] == "F" else "normal")]
     head = code + ("  (frozen default)" if code == FROZEN_DEFAULT else "")
     return f"{head}\ncap {parts[0]} · band {parts[1]} · close {parts[2]} · size {parts[3]}"
 
