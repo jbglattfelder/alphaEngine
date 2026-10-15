@@ -116,6 +116,10 @@ The site is static. `.github/workflows/venue.yml` publishes it to GitHub Pages
 pass. One-time setup:
 
 1. Settings → Pages → Source: **GitHub Actions**
-2. Settings → Secrets and variables → Actions → Variables: `VENUE_PAGES` = `true`
+2. Settings → Secrets and variables → Actions → Variables tab → **Repository
+   variables** → `VENUE_PAGES` = `true`. It must be a repository variable,
+   not an environment variable: the deploy job's `if:` is evaluated before the
+   job enters its `github-pages` environment, so an environment variable is
+   not visible there.
 
 The site then lives at `https://<owner>.github.io/alphaEngine/venue/`.

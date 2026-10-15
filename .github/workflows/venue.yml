@@ -25,7 +25,7 @@ jobs:
         run: python -m pytest venue/tests -q
 
   # One-time setup: Settings -> Pages -> Source: GitHub Actions, and the
-  # repository variable VENUE_PAGES=true (Settings -> Secrets and variables
+  # REPOSITORY variable (not an environment variable) VENUE_PAGES=true (Settings -> Secrets and variables
   # -> Actions -> Variables). Deploys on pushes to main only.
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.VENUE_PAGES == 'true'
