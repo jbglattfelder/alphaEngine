@@ -173,6 +173,7 @@ the event tape only.
 ```
 /                     the null model: two runnable scripts + the validator
 ├── helper/           auxiliary modules (imported by the root scripts)
+├── venue/            RPM Exchange: a browser trading venue on the root engine (section 9)
 ├── eval/             simulation output (EVALUATION.md = the running log)
 │   ├── bench/        benchmark reference runs (NNNN, n=2 and n=150)
 │   ├── runs/         the n=5,000 and n=7,500 runs behind the paper's figures
@@ -211,3 +212,42 @@ it is, the answer is in there.
 2026): which tools are broken or biased, which numbers in the docs are
 superseded, and where code and paper differ. None of it is fixed here, so
 that the engine stays byte-identical to the one behind the paper.
+
+## 9. The venue (RPM Exchange)
+
+`venue/` is a mock-up of a spot exchange for the pair RCC/EUR, styled after
+Coinbase Advanced. You trade against the null model's crowd in your browser.
+It imports the root `simulation_mvp.py` unchanged (its hash is pinned in
+`venue/FROZEN.sha256`, and CI runs the validator on every push). Everything
+it adds is in `venue/py/venue_wrapper.py`. The engine runs client-side under
+Pyodide, so every browser tab owns its own market and nothing is stored.
+
+What `venue/README.md` covers:
+
+- the settings: arm NNNN/PFCF, n, K, tp, sl, c, q, seed, and your own
+  allocation, at most 75% of K
+- the order types
+- the PnL: arXiv:2411.14068, with the spread
+- how ticks map to time
+
+To run it locally:
+
+```bash
+python -m http.server 8000      # from the repo root, then open http://localhost:8000/venue/
+```
+
+### Publishing on GitHub Pages
+
+`.github/workflows/venue.yml` deploys the site on every push to `main`, once
+the tests pass. It needs a one-time setup:
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+2. **Settings → Secrets and variables → Actions → Variables tab → Repository
+   variables → New repository variable**: name `VENUE_PAGES`, value `true`.
+
+It must be a *repository* variable, not an environment variable. The
+workflow reads `vars.VENUE_PAGES` in the deploy job's `if:`, which GitHub
+evaluates before the job enters its `github-pages` environment, so a
+variable set only on that environment is never seen. The site is then
+served at `https://<owner>.github.io/alphaEngine/venue/`. Deleting the
+variable switches deployment off again.
