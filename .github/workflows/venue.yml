@@ -1,0 +1,53 @@
+name: venue
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "numpy>=1.26" pytest
+      - name: Engine and validator are byte-identical to tag v1.0-paper
+        run: sha256sum -c venue/FROZEN.sha256
+      - name: Frozen validator
+        run: python validate_simulation_mvp.py
+      - name: Venue wrapper tests
+        run: python -m pytest venue/tests -q
+
+  # One-time setup: Settings -> Pages -> Source: GitHub Actions, and the
+  # repository variable VENUE_PAGES=true (Settings -> Secrets and variables
+  # -> Actions -> Variables). Deploys on pushes to main only.
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.VENUE_PAGES == 'true'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Site = the engine at the root + venue/ (no tests)
+        run: |
+          mkdir -p _site/venue/py
+          cp simulation_mvp.py _site/
+          cp -r venue/index.html venue/css venue/js _site/venue/
+          cp venue/py/venue_wrapper.py _site/venue/py/
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=venue/"><title>RPM Exchange</title><a href="venue/">RPM Exchange</a>\n' > _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

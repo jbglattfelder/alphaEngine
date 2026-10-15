@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RPM Exchange</title>
+<meta name="description" content="RCC/EUR spot venue run by the Alpha Engine null model.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23e8496b'/%3E%3Cpath d='M16 7c4 3 6 6 6 9a6 6 0 0 1-12 0c0-3 2-6 6-9z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- ═══════════════ 1. sign in (cosmetic) ═══════════════ -->
+<section id="screen-login" class="screen center">
+  <div class="card auth">
+    <div class="brand-lg"><span class="logo"></span><div><b>Rose Prosperity Movement</b><small>Exchange</small></div></div>
+    <h1>Sign in</h1>
+    <label><span>Name</span><input id="login-name" type="text" autocomplete="off" placeholder="Your name" maxlength="40"></label>
+    <label><span>Password</span><input id="login-pass" type="password" placeholder="••••••••"></label>
+    <button id="btn-login" class="btn primary wide">Continue</button>
+  </div>
+</section>
+
+<!-- ═══════════════ 2. configure the market ═══════════════ -->
+<section id="screen-config" class="screen center hidden">
+  <div class="card config">
+    <div class="brand-lg"><span class="logo"></span><div><b>Rose Prosperity Movement</b><small>Open a market</small></div></div>
+    <h1>Configure RCC/EUR</h1>
+    <p class="muted">The market opens at x<sub>0</sub> = 100 EUR per RCC. Everyone else in it is a zero-intelligence agent.</p>
+
+    <h2>Market</h2>
+    <div class="seg" id="cfg-arm">
+      <button data-v="NNNN" class="on">NNNN<small>normal capital, bands, timer, size</small></button>
+      <button data-v="PFCF">PFCF<small>Pareto capital, fixed bands, clock timer, fixed size</small></button>
+    </div>
+    <div class="grid2">
+      <label><span>Agents per side <i>n</i></span><input id="cfg-n" type="number" min="1" max="1000" step="1" value="150"><small>population = 2n</small></label>
+      <label><span>Crowd capital <i>K</i> (EUR)</span><input id="cfg-K" type="number" min="1000" step="1000" value="1000000"></label>
+      <label><span>Take profit <i>tp</i> (%)</span><input id="cfg-tp" type="number" min="0.01" max="50" step="0.05" value="1"><small id="cfg-band-note">mean of per-agent draws, cv 0.3</small></label>
+      <label><span>Stop loss <i>sl</i> (%)</span><input id="cfg-sl" type="number" min="0.01" max="50" step="0.05" value="1"><small>log distance from entry</small></label>
+      <label><span>Clock rate <i>c</i></span><input id="cfg-c" type="number" min="0.0001" max="1" step="0.0005" value="0.004"><small>pressure per tick</small></label>
+      <label><span>Order fraction <i>q</i></span><input id="cfg-q" type="number" min="1" max="100" step="1" value="8"><small>each open deploys wealth/q</small></label>
+      <label><span>Seed</span><input id="cfg-seed" type="number" min="0" step="1" value="9"><small>same seed, same market</small></label>
+    </div>
+
+    <h2>Your allocation <span class="muted small">on top of K, at most 75% of K</span></h2>
+    <div class="grid2">
+      <label><span>EUR</span><input id="cfg-eur" type="number" min="0" step="100" value="50000"></label>
+      <label><span>RCC</span><input id="cfg-rcc" type="number" min="0" step="1" value="500"></label>
+    </div>
+    <div class="alloc">
+      <div class="alloc-bar"><span id="alloc-fill"></span></div>
+      <div class="alloc-txt"><span id="alloc-val">—</span><span id="alloc-max">—</span></div>
+    </div>
+    <p id="cfg-err" class="err"></p>
+    <button id="btn-launch" class="btn primary wide">Open market</button>
+  </div>
+</section>
+
+<!-- ═══════════════ 3. loading ═══════════════ -->
+<section id="screen-loading" class="screen center hidden">
+  <div class="card loading">
+    <span class="logo spin"></span>
+    <p id="loading-msg">Starting the engine…</p>
+    <small class="muted">The engine runs in your browser (Python via WebAssembly). The first load fetches about 15 MB; later loads come from the cache.</small>
+  </div>
+</section>
+
+<!-- ═══════════════ 4. the venue ═══════════════ -->
+<section id="screen-trade" class="hidden">
+  <header class="topbar">
+    <div class="brand"><span class="logo"></span><span class="brand-txt">Rose Prosperity<br>Movement</span></div>
+    <div class="pair"><span class="coin">R</span><b>RCC-EUR</b><span class="tag" id="hdr-arm">NNNN</span></div>
+    <div class="stat"><small>Last price</small><span><b id="hdr-last">100.00</b> <em id="hdr-chg" class="up">+0.00%</em></span></div>
+    <div class="stat hide-sm"><small>Session high / low</small><span id="hdr-hl">—</span></div>
+    <div class="stat hide-sm"><small>Volume (RCC)</small><span id="hdr-vol">0</span></div>
+    <div class="stat hide-md"><small>Agents alive</small><span id="hdr-alive">—</span></div>
+    <div class="spacer"></div>
+    <div class="clock">
+      <div class="stat"><small>Tick</small><span id="hdr-tick" class="mono">0</span></div>
+      <div class="stat"><small id="hdr-date">—</small><span id="hdr-time" class="mono">--:--:--</span></div>
+    </div>
+    <div class="transport">
+      <button id="btn-play" class="btn play" title="Play / pause (space)"><svg viewBox="0 0 24 24"><path id="play-icon" d="M8 5v14l11-7z"/></svg></button>
+      <div class="dial">
+        <input id="speed" type="range" min="0" max="100" value="45" aria-label="ticks per second">
+        <small><b id="speed-val">10</b> ticks/s <span class="muted" id="speed-real"></span></small>
+      </div>
+    </div>
+    <button id="btn-new" class="btn ghost" title="Close this market and configure a new one">New market</button>
+    <div class="avatar" id="avatar" title="">?</div>
+  </header>
+
+  <main class="venue">
+    <!-- chart -->
+    <section class="panel p-chart">
+      <div class="tabs" data-group="chart">
+        <button class="on" data-tab="price">Price chart</button>
+        <button data-tab="depth">Depth chart</button>
+        <div class="spacer"></div>
+        <span class="muted small" id="chart-note">line = last print per tick · x-axis in ticks</span>
+      </div>
+      <div class="tabpane on" data-pane="price"><div id="chart"></div></div>
+      <div class="tabpane" data-pane="depth"><canvas id="depth"></canvas></div>
+    </section>
+
+    <!-- book / trades -->
+    <section class="panel p-book">
+      <div class="tabs" data-group="book">
+        <button class="on" data-tab="book">Order book</button>
+        <button data-tab="trades">Recent trades</button>
+        <div class="spacer"></div>
+        <select id="book-group" title="Price increment">
+          <option value="0">exact</option><option value="0.01">0.01</option>
+          <option value="0.05">0.05</option><option value="0.1">0.10</option>
+          <option value="0.5">0.50</option><option value="1">1.00</option>
+        </select>
+      </div>
+      <div class="tabpane on" data-pane="book">
+        <div class="bk-head"><span>Price (EUR)</span><span>Amount (RCC)</span><span>Total (RCC)</span></div>
+        <div id="asks" class="bk-side asks"></div>
+        <div class="bk-mid"><b id="bk-last">100.00</b><span id="bk-spread" class="muted">Spread —</span></div>
+        <div id="bids" class="bk-side bids"></div>
+      </div>
+      <div class="tabpane" data-pane="trades">
+        <div class="bk-head"><span>Price (EUR)</span><span>Amount (RCC)</span><span>Time</span></div>
+        <div id="tape" class="tape"></div>
+      </div>
+    </section>
+
+    <!-- order form + account -->
+    <section class="panel p-form">
+      <div class="tabs"><button class="on">Order form</button></div>
+      <div class="form">
+        <div class="bs">
+          <button id="side-buy" class="on buy">Buy</button>
+          <button id="side-sell" class="sell">Sell</button>
+        </div>
+        <div class="kinds">
+          <button data-kind="limit" class="on">Limit</button>
+          <button data-kind="market">Market</button>
+        </div>
+        <div class="avail"><span>Available</span><b id="f-avail">—</b></div>
+        <div class="field" id="f-price-row">
+          <label>Limit price <span class="quick"><a data-q="bid">BID</a> | <a data-q="mid">MID</a> | <a data-q="ask">ASK</a></span></label>
+          <div class="inp"><input id="f-price" type="number" step="0.01" min="0" placeholder="0.00"><span>EUR</span></div>
+        </div>
+        <div class="field">
+          <label>Amount</label>
+          <div class="inp"><input id="f-qty" type="number" step="0.0001" min="0" placeholder="0.00"><button id="f-unit" class="unit" title="Switch unit">RCC</button></div>
+        </div>
+        <div class="pct">
+          <input id="f-pct" type="range" min="0" max="100" step="1" value="0">
+          <div class="pct-ticks"><a data-p="25">25%</a><a data-p="50">50%</a><a data-p="75">75%</a><a data-p="100">Max</a></div>
+        </div>
+        <div class="total"><span id="f-total-lbl">Total</span><b id="f-total">—</b></div>
+        <button id="f-submit" class="btn buy wide">Buy RCC</button>
+        <p class="muted small">Spot only · no fees · market orders fill what the book holds and drop the rest · limit orders rest until filled or cancelled.</p>
+      </div>
+      <div class="acct">
+        <h3>Portfolio</h3>
+        <div class="row"><span>EUR</span><b id="a-eur">—</b></div>
+        <div class="row"><span>RCC</span><b id="a-rcc">—</b></div>
+        <div class="row"><span>Value (EUR)</span><b id="a-wealth">—</b></div>
+        <div class="row sep"><span>Realised PnL</span><b id="a-real">—</b></div>
+        <div class="row"><span>Unrealised PnL</span><b id="a-unreal">—</b></div>
+        <div class="row"><span>Total PnL</span><b id="a-total">—</b></div>
+      </div>
+    </section>
+
+    <!-- bottom tabs -->
+    <section class="panel p-bottom">
+      <div class="tabs" data-group="bottom">
+        <button class="on" data-tab="open">Open orders <span class="cnt" id="cnt-open">0</span></button>
+        <button data-tab="hist">Order history</button>
+        <button data-tab="fills">Trade history</button>
+        <button data-tab="assets">Assets &amp; PnL</button>
+        <div class="spacer"></div>
+        <button id="btn-cancel-all" class="btn tiny danger">Cancel all</button>
+      </div>
+      <div class="tabpane on scroll" data-pane="open">
+        <table><thead><tr><th>Time</th><th>Tick</th><th>Side</th><th>Type</th><th>Price</th><th>Amount</th><th>Filled</th><th>Remaining</th><th>Status</th><th></th></tr></thead><tbody id="t-open"></tbody></table>
+        <p class="empty" id="e-open">No open orders</p>
+      </div>
+      <div class="tabpane scroll" data-pane="hist">
+        <table><thead><tr><th>Time</th><th>Tick</th><th>Side</th><th>Type</th><th>Price</th><th>Amount</th><th>Filled</th><th>Avg price</th><th>Status</th><th>Note</th></tr></thead><tbody id="t-hist"></tbody></table>
+        <p class="empty" id="e-hist">No orders yet</p>
+      </div>
+      <div class="tabpane scroll" data-pane="fills">
+        <table><thead><tr><th>Time</th><th>Tick</th><th>Side</th><th>Price</th><th>Amount (RCC)</th><th>Total (EUR)</th><th>Role</th><th>Counterparty</th><th>Realised</th></tr></thead><tbody id="t-fills"></tbody></table>
+        <p class="empty" id="e-fills">No trades yet</p>
+      </div>
+      <div class="tabpane scroll" data-pane="assets">
+        <div class="assets">
+          <table class="narrow"><thead><tr><th>Coin</th><th>Balance</th><th>Available</th><th>In orders</th><th>Start</th><th>Value (EUR)</th></tr></thead><tbody id="t-assets"></tbody></table>
+          <div class="pnlgrid" id="pnlgrid"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div id="banner" class="banner hidden"></div>
+</section>
+
+<div id="toasts"></div>
+
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
