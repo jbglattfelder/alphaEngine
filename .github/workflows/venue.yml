@@ -81,6 +81,11 @@ jobs:
           cp simulation_mvp.py _site/
           cp -r venue/index.html venue/css venue/js venue/img _site/venue/
           cp venue/py/venue_wrapper.py _site/venue/py/
+          # version stamp: every file URL carries this commit, so no browser
+          # mixes files cached from an older deploy with this one
+          sed -i "s/__BUILD__/${GITHUB_SHA::12}/g" _site/venue/index.html
+          grep -q "v=${GITHUB_SHA::12}" _site/venue/index.html
+          ! grep -rq "__BUILD__" _site
           printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=venue/"><title>RPM Exchange</title><a href="venue/">RPM Exchange</a>\n' > _site/index.html
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -195,10 +195,10 @@ test("n = 10,000 per side opens", async ({ page }) => {
   expect(await tick(page)).toBe(3);
 });
 
-test("a market starts playing by itself at medium speed", async ({ page }) => {
+test("a market starts playing by itself at 6 ticks/s", async ({ page }) => {
   await signIn(page, undefined, undefined, "?e2e&autoplay");
   await launch(page);
-  await expect(page.locator("#speed-val")).toHaveText("22");
+  await expect(page.locator("#speed-val")).toHaveText("6");
   await expect(page.locator("#play-icon")).toHaveAttribute("d", "M7 5h4v14H7zM13 5h4v14h-4z");   // pause glyph
   await expect.poll(() => tick(page), { timeout: 15_000 }).toBeGreaterThan(10);
   await page.click("#btn-play");
@@ -234,4 +234,35 @@ test("the price chart zooms out to the whole session", async ({ page }) => {
   for (let i = 0; i < 60; i++) await page.mouse.wheel(0, 400);
   const r = await page.evaluate(() => window.__rpm.visible());
   expect(r.to - r.from).toBeGreaterThanOrEqual(6000);
+});
+
+test("going to the depth chart resets the price chart's zoom and scroll", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 3000);
+  const fresh = await page.evaluate(() => window.__rpm.visible());
+  const box = await page.locator("#chart").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let i = 0; i < 30; i++) await page.mouse.wheel(0, 400);            // zoom far out
+  await page.mouse.down();                                                  // and drag the curve away
+  await page.mouse.move(box.x + box.width - 5, box.y + box.height / 2, { steps: 10 });
+  await page.mouse.up();
+  const lost = await page.evaluate(() => window.__rpm.visible());
+  expect(lost.to - lost.from).toBeGreaterThan(2 * (fresh.to - fresh.from));
+  await page.click(".tabs[data-group=chart] button[data-tab=depth]");
+  await page.click(".tabs[data-group=chart] button[data-tab=price]");
+  const back = await page.evaluate(() => window.__rpm.visible());
+  expect(back.from).toBeCloseTo(fresh.from, 0);
+  expect(back.to).toBeCloseTo(fresh.to, 0);
+});
+
+test("every file is fetched with the deploy's version stamp", async ({ page }) => {
+  const seen = [];
+  await page.context().route(/\/(js|css|py)\/[^/]+\.(js|css|py)(\?|$)|simulation_mvp\.py/, (route) => {
+    seen.push(new URL(route.request().url()));
+    route.fallback();
+  });
+  await openMarket(page);
+  const names = seen.map((u) => u.pathname.split("/").pop()).sort();
+  expect(names).toEqual(["app.css", "app.js", "simulation_mvp.py", "venue_wrapper.py", "worker.js"]);
+  for (const u of seen) expect(u.searchParams.get("v"), u.pathname).toBe("__BUILD__");   // replaced at deploy
 });

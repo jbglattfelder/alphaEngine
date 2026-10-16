@@ -2,6 +2,9 @@
 (() => {
   "use strict";
 
+  // the deploy's version stamp (see index.html), handed to every file loaded later
+  const BUILD = new URL(document.currentScript.src).searchParams.get("v") || "dev";
+
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const X0 = 100, MAX_FRAC = 0.75;
@@ -112,7 +115,7 @@
   };
 
   // ═════════════ worker ═════════════
-  const worker = new Worker("js/worker.js");
+  const worker = new Worker(`js/worker.js?v=${encodeURIComponent(BUILD)}`);
   const pongs = new Map();
 
   // Test hooks for venue/e2e, only with ?e2e in the URL. step(k) runs exactly
@@ -427,7 +430,17 @@
     $$("button[data-tab]", bar).forEach((x) => x.classList.toggle("on", x === b));
     const panel = bar.parentElement;
     $$(".tabpane", panel).forEach((p) => p.classList.toggle("on", p.dataset.pane === b.dataset.tab));
-    if (bar.dataset.group === "chart") { S.chartTab = b.dataset.tab; $("#chart-note").classList.toggle("hidden", S.chartTab !== "price"); pushView(); }
+    if (bar.dataset.group === "chart") {
+      S.chartTab = b.dataset.tab;
+      $("#chart-note").classList.toggle("hidden", S.chartTab !== "price");
+      // leaving the price chart resets its zoom, scroll and price axis, so
+      // coming back always shows the live end of the curve
+      if (S.chartTab !== "price" && chart) {
+        chart.timeScale().resetTimeScale();
+        chart.priceScale("right").applyOptions({ autoScale: true });
+      }
+      pushView();
+    }
   }));
   $("#book-group").onchange = (e) => { S.group = +e.target.value; pushView(); };
   function pushView() { worker.postMessage({ type: "view", group: S.group, depth: S.chartTab === "depth" }); }
@@ -446,7 +459,7 @@
     $("#speed-val").textContent = S.tps;
     worker.postMessage({ type: "speed", tps: S.tps });
   });
-  $("#speed").value = 50; S.tps = speedFromDial(50); $("#speed-val").textContent = S.tps;
+  $("#speed").value = 29; S.tps = 6; $("#speed-val").textContent = S.tps;     // start at 6 ticks/s
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" && !$("#screen-trade").classList.contains("hidden") && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) {
       e.preventDefault(); $("#btn-play").click();

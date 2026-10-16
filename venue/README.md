@@ -49,7 +49,7 @@ Settings cannot be changed while a market runs; open a new market instead.
 ## Time
 
 A tick is one engine step, not a second. A new market starts playing at once,
-at the middle of the dial (22 ticks/s). Play/pause (or the space bar) and the
+at 6 ticks/s. Play/pause (or the space bar) and the
 ticks-per-second dial drive a loop in a Web Worker. Your orders are applied between ticks:
 JavaScript is single-threaded, so a message from the page can only be handled
 between two engine steps. The header shows the tick counter and your local
@@ -59,7 +59,9 @@ The price chart draws one point per tick (the last print) and a volume bar per
 tick (RCC printed since the previous tick; a trade you make between ticks
 counts towards the next bar; green when the price did not fall). You can zoom
 out until the whole session fits. Each of your trades gets one arrow, however
-many makers it filled against.
+many makers it filled against. Switching to the depth chart resets the price
+chart's zoom, scroll and price axis, so coming back always shows the live end
+of the curve.
 
 ## Orders
 
@@ -159,3 +161,9 @@ pass. One-time setup:
    not visible there.
 
 The site then lives at `https://<owner>.github.io/alphaEngine/venue/`.
+
+**Caching.** GitHub Pages lets browsers cache files for 10 minutes. The deploy
+stamps every file URL with the commit id: `__BUILD__` in `index.html` becomes
+`v=<commit>`, and `app.js` hands it on to the worker and the Python files. So
+a browser never runs a new page against an old cached `venue_wrapper.py`. It
+did once, which made the volume bars disappear without an error.
