@@ -59,7 +59,8 @@ The price chart draws one point per tick (the last print) and a volume bar per
 tick (RCC printed since the previous tick; a trade you make between ticks
 counts towards the next bar; green when the price did not fall). You can zoom
 out until the whole session fits. Each of your trades gets one arrow, however
-many makers it filled against. Switching to the depth chart resets the price
+many makers it filled against. Your open limit orders show as dotted lines (green buy, red sell), with no
+labels on the price axis; the Open orders tab has the details. Switching to the depth chart resets the price
 chart's zoom, scroll and price axis, so coming back always shows the live end
 of the curve.
 

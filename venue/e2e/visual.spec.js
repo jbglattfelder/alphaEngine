@@ -2,15 +2,19 @@
 // A difference fails the test; intended changes are re-baselined explicitly
 // (npm run update) and the changed images are listed in the commit.
 const path = require("path");
-const { test, expect, signIn, configure, openMarket, step, sync, quick, referenceSession } = require("./fixtures");
+const { test, expect, signIn, configure, openMarket, step, sync, quick, order, referenceSession } = require("./fixtures");
 
 const STYLE = path.join(__dirname, "screenshot.css");
 const shot = (opts = {}) => ({ stylePath: STYLE, ...opts });
 
 // Park the pointer in the top-left corner first: hover changes pixels (the
 // number spinner, row highlights), so where the last click left it must not matter.
+// Then scroll to the top.
 async function snap(page, target, name, opts) {
   await page.mouse.move(1, 1);
+  // from the top: the sticky top bar is drawn at the current scroll position,
+  // so wherever the last click scrolled to must not matter either
+  await page.evaluate(() => window.scrollTo(0, 0));
   await expect.soft(target).toHaveScreenshot(name, opts);
 }
 
@@ -74,6 +78,13 @@ test.describe("the venue, reference session", () => {
     await snap(page, book, "panel-book-0.10.png", shot());
     await page.click(".tabs[data-group=book] button[data-tab=trades]");
     await snap(page, book, "panel-recent-trades.png", shot());
+  });
+
+  test("panel: price chart with resting limit orders close together", async ({ page }) => {
+    await referenceSession(page);
+    for (const px of ["112.00", "112.40", "112.80", "113.20"]) await order(page, { side: "sell", kind: "limit", qty: 2, price: px });
+    await order(page, { side: "buy", kind: "limit", qty: 2, price: "101.00" });
+    await snap(page, page.locator(".p-chart"), "panel-price-chart-orders.png", shot());
   });
 
   test("panels: bottom tabs", async ({ page }) => {

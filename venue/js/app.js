@@ -134,6 +134,7 @@
       volumes: () => volume.data().map((d) => d.value),
       markers: () => S.markers.length,
       visible: () => chart.timeScale().getVisibleLogicalRange(),
+      orderLines: () => [...S.priceLines.values()].map((pl) => pl.options()),
     };
   }
   worker.onmessage = (ev) => {
@@ -386,9 +387,12 @@
     if (!series) return;
     const ids = new Set(open.map((o) => o.id));
     for (const [id, pl] of S.priceLines) if (!ids.has(id)) { series.removePriceLine(pl); S.priceLines.delete(id); }
+    // a dotted line per open order, nothing on the price axis: several orders a
+    // few cents apart must not stack label boxes over the chart (details live in
+    // the Open orders tab)
     for (const o of open) if (!S.priceLines.has(o.id)) {
       S.priceLines.set(o.id, series.createPriceLine({ price: o.price, color: o.side === "buy" ? "#27ad75" : "#f0616d",
-        lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `${o.side} ${F4.format(o.remaining)}` }));
+        lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false, title: "" }));
     }
   }
 

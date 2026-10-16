@@ -266,3 +266,39 @@ test("every file is fetched with the deploy's version stamp", async ({ page }) =
   expect(names).toEqual(["app.css", "app.js", "simulation_mvp.py", "venue_wrapper.py", "worker.js"]);
   for (const u of seen) expect(u.searchParams.get("v"), u.pathname).toBe("__BUILD__");   // replaced at deploy
 });
+
+test("open limit orders are dotted lines without axis labels, gone when cancelled", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 300);
+  for (const px of ["150.00", "150.50", "151.00"]) await order(page, { side: "sell", kind: "limit", qty: 2, price: px });
+  await order(page, { side: "buy", kind: "limit", qty: 2, price: "60.00" });
+  const lines = await page.evaluate(() => window.__rpm.orderLines());
+  expect(lines.map((l) => l.price).sort()).toEqual([150, 150.5, 151, 60].sort());
+  for (const l of lines) {
+    expect(l.axisLabelVisible).toBe(false);
+    expect(l.title).toBe("");
+    expect(l.lineStyle).toBe(1);                                   // LineStyle.Dotted
+  }
+  await page.click("#btn-cancel-all");
+  await sync(page);
+  expect(await page.evaluate(() => window.__rpm.orderLines())).toEqual([]);
+});
+
+test("amount slider labels: 0 % to Max, each sets its own value", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 100);
+  await page.click("#side-sell");                                   // 500 RCC available
+  await expect(page.locator(".pct-ticks a")).toHaveText(["0%", "25%", "50%", "75%", "Max"]);
+  for (const [p, q] of [["50", "250"], ["0", "0"], ["25", "125"], ["100", "500"]]) {
+    await page.click(`.pct-ticks a[data-p="${p}"]`);
+    expect(await page.inputValue("#f-pct")).toBe(p);
+    expect(parseFloat(await page.inputValue("#f-qty"))).toBeCloseTo(+q, 3);
+  }
+  // each middle label is centred over the slider position it sets
+  const slider = await page.locator("#f-pct").boundingBox();
+  for (const p of [25, 50, 75]) {
+    const b = await page.locator(`.pct-ticks a[data-p="${p}"]`).boundingBox();
+    const want = slider.x + 8 + (slider.width - 16) * p / 100;
+    expect(Math.abs(b.x + b.width / 2 - want)).toBeLessThan(1.5);
+  }
+});
