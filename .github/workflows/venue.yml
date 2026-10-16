@@ -24,12 +24,43 @@ jobs:
       - name: Venue wrapper tests
         run: python -m pytest venue/tests -q
 
+  # Visual + behaviour regression of the GUI (venue/e2e). Runs in the pinned
+  # Playwright image so screenshots are pixel-identical to the committed
+  # baselines (which are made in the same image, see venue/e2e/README.md).
+  e2e:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble@sha256:f1e7e01021efd65dd1a2c56064be399f3e4de00fd021ac561325f2bfbb2b837a
+      options: --ipc=host
+    env:
+      HOME: /root
+    defaults:
+      run:
+        working-directory: venue/e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: venue/e2e/pyodide-cache
+          key: pyodide-0.27.7-numpy-2.0.2
+      - run: npm ci
+      - run: node fetch-pyodide.js
+      - run: npx playwright test
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            venue/e2e/playwright-report
+            venue/e2e/test-results
+          retention-days: 14
+
   # One-time setup: Settings -> Pages -> Source: GitHub Actions, and the
   # REPOSITORY variable (not an environment variable) VENUE_PAGES=true (Settings -> Secrets and variables
   # -> Actions -> Variables). Deploys on pushes to main only.
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.VENUE_PAGES == 'true'
-    needs: test
+    needs: [test, e2e]
     runs-on: ubuntu-latest
     permissions:
       pages: write

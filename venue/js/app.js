@@ -98,12 +98,26 @@
 
   // ═════════════ worker ═════════════
   const worker = new Worker("js/worker.js");
+  const pongs = new Map();
+
+  // Test hooks for venue/e2e, only with ?e2e in the URL. step(k) runs exactly
+  // k ticks while paused; sync() resolves once the worker has handled every
+  // earlier message and the page has rendered its replies.
+  if (new URLSearchParams(location.search).has("e2e")) {
+    let pid = 0;
+    const sync = () => new Promise((r) => { const id = ++pid; pongs.set(id, r); worker.postMessage({ type: "ping", id }); });
+    window.__rpm = {
+      sync,
+      step: (k) => { worker.postMessage({ type: "stepN", k }); return sync(); },
+    };
+  }
   worker.onmessage = (ev) => {
     const m = ev.data;
     if (m.type === "loading") $("#loading-msg").textContent = m.msg;
     else if (m.type === "ready") onReady(m);
     else if (m.type === "update") onUpdate(m);
     else if (m.type === "result") onResult(m);
+    else if (m.type === "pong") { const r = pongs.get(m.id); pongs.delete(m.id); if (r) r(); }
     else if (m.type === "stopped") { setPlaying(false); banner("Market stopped: " + m.reason); }
     else if (m.type === "error") {
       console.error(m.detail || m.msg);

@@ -1,0 +1,14 @@
+{
+  "name": "rpm-venue-e2e",
+  "private": true,
+  "description": "Visual and behaviour regression tests for venue/ (run in the Playwright Docker image, see README.md)",
+  "scripts": {
+    "test": "playwright test",
+    "update": "playwright test --update-snapshots",
+    "pyodide": "node fetch-pyodide.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "lightweight-charts": "4.2.0"
+  }
+}
