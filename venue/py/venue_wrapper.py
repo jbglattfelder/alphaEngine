@@ -213,6 +213,57 @@ class UserWallet:
 
 
 @dataclass
+class Lot:
+    """One position: every market order, and every limit order that fills,
+    opens its own (a ticket-style book, positions can be long and short at
+    once). Partial fills of the same order grow the same position. An order
+    placed from a position (Close / Increase / Decrease) carries pos_id, and
+    its fills go into that position instead. A fill that takes a position
+    through zero closes it, and the remainder opens a new one."""
+    id: int
+    order: int                 # the order that opened it
+    tick: int
+    entry: float               # price of the first fill
+    b: float = 0.0             # RCC, signed (> 0 long, < 0 short)
+    q: float = 0.0             # EUR, signed tally (Eq. 1 for this position)
+    realised: float = 0.0      # banked by reductions (EUR)
+    dust: float = 1e-12
+
+    def apply(self, u: float, x: float) -> float:
+        """Book a fill of u RCC at x into this position. Returns the part of u
+        it could not absorb (a reduction past zero), 0.0 otherwise."""
+        if self.b == 0.0 or (self.b > 0) == (u > 0):
+            self.b += u
+            self.q -= x * u
+            return 0.0
+        s = 1.0 if self.b > 0 else -1.0
+        r = min(abs(u), abs(self.b))
+        avg = -self.q / self.b
+        self.realised += (x - avg) * r * s
+        self.b -= s * r
+        self.q = -avg * self.b
+        if abs(self.b) <= self.dust:
+            self.b, self.q = 0.0, 0.0
+        rest = u + s * r
+        return rest if abs(rest) > self.dust else 0.0
+
+    @property
+    def open(self) -> bool:
+        return self.b != 0.0
+
+    def view(self, last: float, bid: Optional[float], ask: Optional[float]) -> dict:
+        side = "long" if self.b > 0 else "short"
+        mark = bid if self.b > 0 else ask                 # where it would close (x')
+        if mark is None or mark <= 0:
+            mark = last
+        return dict(id=self.id, order=self.order, side=side, size=abs(self.b),
+                    value=abs(self.b) * mark, entry_price=self.entry,
+                    avg_price=-self.q / self.b, x_prime=mark,
+                    unrealised=mark * self.b + self.q, realised=self.realised,
+                    opened_tick=self.tick)
+
+
+@dataclass
 class UserOrder:
     id: int
     side: str                # "buy" | "sell"
@@ -226,6 +277,7 @@ class UserOrder:
     filled: float = 0.0      # RCC
     notional: float = 0.0    # EUR
     reason: str = ""
+    pos_id: Optional[int] = None       # placed from this position (Close / Increase / Decrease)
     resting: Optional[Order] = None    # the engine Order resting in the book
     rest_qty: float = 0.0              # last seen resting RCC (fill attribution)
 
@@ -271,6 +323,10 @@ class VenueSim(Simulation):
         self._next_user_id = 1
         self._user_taker: Optional[UserOrder] = None
         self.user_fills: list[dict] = []                # drained by Venue
+        self.lots: dict[int, Lot] = {}                  # open positions, by id
+        self._lot_of_order: dict[int, int] = {}         # order id -> its open position
+        self._next_lot = 1
+        self.lots_banked = 0.0                          # realised by closed positions (EUR)
         self.user_events: list[dict] = []               # order status changes
         self.volume = 0.0                               # session RCC volume, every print
         self.hi = self.lo = cfg.x_0                     # session high / low print
@@ -328,6 +384,7 @@ class VenueSim(Simulation):
         u = tr.size if tr.buy_agent == USER_ID else -tr.size
         realised = self.pnl.fill(u, tr.price, tick=self.t)
         if uo is not None:
+            self._book_lot(uo, u, tr.price)
             uo.filled += tr.size
             uo.notional += tr.size * tr.price
         cp = tr.sell_agent if u > 0 else tr.buy_agent
@@ -335,6 +392,29 @@ class VenueSim(Simulation):
             order=(uo.id if uo else None), tick=self.t, wall=time.time(),
             side=("buy" if u > 0 else "sell"), size=tr.size, price=tr.price,
             role=role, counterparty=cp, realised=realised))
+
+    def _book_lot(self, uo: UserOrder, u: float, x: float) -> None:
+        """Route one fill to a position: the one the order was placed from,
+        else the one this order already opened, else a new one."""
+        lot = None
+        if uo.pos_id is not None:
+            lot = self.lots.get(uo.pos_id)
+        if lot is None and uo.id in self._lot_of_order:
+            lot = self.lots.get(self._lot_of_order[uo.id])
+        rest = u
+        if lot is not None:
+            rest = lot.apply(u, x)
+            if not lot.open:
+                self.lots_banked += lot.realised
+                del self.lots[lot.id]
+                for oid in [o for o, lid in self._lot_of_order.items() if lid == lot.id]:
+                    del self._lot_of_order[oid]
+        if rest != 0.0:
+            new = Lot(id=self._next_lot, order=uo.id, tick=self.t, entry=x)
+            self._next_lot += 1
+            new.apply(rest, x)
+            self.lots[new.id] = new
+            self._lot_of_order[uo.id] = new.id
 
     def _scan_resting(self, stp: bool, trades: Optional[list[Trade]] = None) -> None:
         """Attribute passive fills to the human's resting orders by the change
@@ -409,14 +489,16 @@ class VenueSim(Simulation):
 
     def user_order(self, side: str, kind: str, qty: Optional[float] = None,
                    price: Optional[float] = None,
-                   eur_amount: Optional[float] = None) -> UserOrder:
+                   eur_amount: Optional[float] = None,
+                   pos_id: Optional[int] = None) -> UserOrder:
         """Place a market or limit order for the human. Market: buy by RCC
         qty or by EUR amount, sell by RCC qty; fills what the book offers,
         the rest is dropped (IOC). Limit: fills what crosses, the rest rests
         at the limit (GTC). Spot only: never spends coins it does not have
         (resting orders lock their coins)."""
         uo = UserOrder(id=self._next_user_id, side=side, kind=kind, price=price,
-                       qty=qty, eur_amount=eur_amount, tick=self.t, wall=time.time())
+                       qty=qty, eur_amount=eur_amount, tick=self.t, wall=time.time(),
+                       pos_id=pos_id)
         self._next_user_id += 1
         self.user_orders[uo.id] = uo
         try:
@@ -640,12 +722,14 @@ class Venue:
 
     # ── the human ───────────────────────────────────────────────────────────
     def place(self, side: str, kind: str, qty: Optional[float] = None,
-              price: Optional[float] = None, eur_amount: Optional[float] = None) -> dict:
+              price: Optional[float] = None, eur_amount: Optional[float] = None,
+              pos_id: Optional[int] = None) -> dict:
         if side not in ("buy", "sell") or kind not in ("market", "limit"):
             raise ValueError("bad order")
         n0 = len(self.sim.trades_log)
         self._log_pos = min(self._log_pos, n0)
-        uo = self.sim.user_order(side, kind, qty=qty, price=price, eur_amount=eur_amount)
+        uo = self.sim.user_order(side, kind, qty=qty, price=price, eur_amount=eur_amount,
+                                 pos_id=(int(pos_id) if pos_id is not None else None))
         prints: list[list] = []
         self._collect_prints(prints, 300)
         return dict(order=uo.view(), prints=prints, fills=self._drain_fills(),
@@ -721,9 +805,16 @@ class Venue:
                     arm=self.arm, stopped=sim.stopped_reason, volume=sim.volume,
                     hi=sim.hi, lo=sim.lo, best_bid=bb, best_ask=ba)
 
+    def positions(self) -> list[dict]:
+        """Open positions, oldest first, each marked at where it would close."""
+        b = self.sim.book
+        return [lot.view(self.sim.p, b.best_bid, b.best_ask)
+                for lot in sorted(self.sim.lots.values(), key=lambda l: l.id)]
+
     def snapshot(self, levels: int = 18, group: float = 0.0) -> dict:
         return dict(market=self.market(), book=self.book(levels, group),
-                    account=self.account(), open_orders=self.open_orders())
+                    account=self.account(), open_orders=self.open_orders(),
+                    positions=self.positions())
 
     def config(self) -> dict:
         c = self.cfg

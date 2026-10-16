@@ -73,6 +73,16 @@
     $("#cfg-band-note").textContent = arm === "NNNN" ? "mean of per-agent draws, cv 0.3" : "identical for every agent";
   }));
   ["#cfg-K", "#cfg-eur", "#cfg-rcc"].forEach((s) => $(s).addEventListener("input", updateAlloc));
+  // n sets the pace: measured in Chromium (venue/README.md), speed ~ 1/n
+  function updateNHint() {
+    const n = Math.round(parseFloat($("#cfg-n").value));
+    if (!(n >= 1)) { $("#cfg-n-hint").textContent = "population = 2n"; return; }
+    const tps = 65000 / Math.max(n, 150), build = n / 4000;
+    const speed = tps >= 10 ? F0.format(Math.min(tps, 450)) : tps >= 1 ? F0.format(tps) : (Math.round(tps * 10) / 10).toString();
+    $("#cfg-n-hint").textContent = `population ${F0.format(2 * n)} · ≈ ${speed} ticks/s` + (build >= 3 ? ` · opens in ≈ ${F0.format(build)} s` : "");
+  }
+  $("#cfg-n").addEventListener("input", updateNHint);
+  updateNHint();
   $$("#screen-config input").forEach((i) => i.addEventListener("input", () => ($("#cfg-err").textContent = "")));
 
   function readCfg() {
@@ -93,7 +103,7 @@
     $("#alloc-max").textContent = `max ${F0.format(max)} EUR`;
   }
   function validate(c) {
-    if (!(c.n >= 1 && c.n <= 10000)) return "n must be between 1 and 10,000 agents per side";
+    if (!(c.n >= 1 && c.n <= 100000)) return "n must be between 1 and 100,000 agents per side";
     if (!(c.K > 0)) return "K must be positive";
     if (!(c.tp > 0 && c.sl > 0)) return "take profit and stop loss must be positive";
     if (!(c.c > 0)) return "c must be positive";
@@ -137,7 +147,7 @@
       // animation frame, so reading at once can be a bar behind (CI flake)
       visible: () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() =>
         r(chart.timeScale().getVisibleLogicalRange())))),
-      position: () => S.position && S.position.side ? S.position : null,
+      positions: () => [...(S.positions || new Map()).values()],
       orderLines: () => [...S.priceLines.values()].map((pl) => pl.options()),
     };
   }
@@ -178,7 +188,8 @@
   }
   function resetVenue() {
     S.orders.clear(); S.fills = []; S.tape = []; S.markers = [];
-    S.openHtml = null; S.posKey = null; S.position = null;
+    S.openHtml = null; S.posKey = null; S.positions = new Map();
+    if (S.link) setLink(null);
     S.priceLines.clear();
     $("#banner").classList.add("hidden");
     $("#tape").innerHTML = "";
@@ -307,7 +318,7 @@
     renderAvail();
     renderOpen(s.open_orders);
     renderAssets(a, mk.price);
-    renderPosition(pnl);
+    renderPositions(s.positions || []);
     syncPriceLines(s.open_orders);
   }
   function setPnl(sel, v) { const el = $(sel); el.textContent = signed(v); el.className = cls(v); }
@@ -354,50 +365,65 @@
   });
   $("#btn-cancel-all").onclick = () => worker.postMessage({ type: "cancelAll" });
 
-  // ── position: one pair, so at most one. Long = net RCC bought, short = net
-  // RCC sold (EUR bought). The row is built when the position opens or flips;
-  // after that only its numbers change, so its buttons stay clickable.
-  function renderPosition(P) {
-    S.position = P;
-    $("#cnt-pos").textContent = P.side ? 1 : 0;
-    $("#e-pos").classList.toggle("hidden", !!P.side);
+  // ── positions: every market order and every filled limit order opens its
+  // own (Lot in venue_wrapper.py). Rows are rebuilt only when the set of
+  // positions changes; numbers update in place, so buttons stay clickable.
+  function renderPositions(list) {
+    S.positions = new Map(list.map((p) => [p.id, p]));
+    $("#cnt-pos").textContent = list.length;
+    $("#e-pos").classList.toggle("hidden", list.length > 0);
     const tb = $("#t-pos");
-    if (!P.side) { if (tb.firstChild) tb.innerHTML = ""; S.posKey = null; return; }
-    const key = `${P.side}:${P.opened_tick}`;
+    const key = list.map((p) => `${p.id}:${p.side}`).join(",");
     if (key !== S.posKey) {
-      const inc = P.side === "long" ? "buy" : "sell", dec = P.side === "long" ? "sell" : "buy";
-      tb.innerHTML = `<tr>
-        <td><b>RCC-EUR</b></td>
-        <td class="${P.side === "long" ? "up" : "dn"}">${P.side === "long" ? "LONG" : "SHORT"}</td>
+      tb.innerHTML = list.map((p) => {
+        const inc = p.side === "long" ? "buy" : "sell", dec = p.side === "long" ? "sell" : "buy";
+        return `<tr data-id="${p.id}">
+        <td class="num">#${p.id}</td>
+        <td class="${p.side === "long" ? "up" : "dn"}">${p.side === "long" ? "LONG" : "SHORT"}</td>
         <td class="num" data-f="size"></td><td class="num" data-f="value"></td>
         <td class="num" data-f="entry"></td><td class="num" data-f="avg"></td><td class="num" data-f="mark"></td>
-        <td class="num" data-f="upnl"></td><td class="num" data-f="opened"></td>
-        <td class="acts"><button class="x" data-pos="close">Close</button><button class="x" data-pos="${inc}" title="${inc} more at market">Increase</button><button class="x" data-pos="${dec}" title="${dec} part at market">Decrease</button></td></tr>`;
+        <td class="num" data-f="upnl"></td><td class="num" data-f="real"></td><td class="num" data-f="opened"></td>
+        <td class="acts"><button class="x" data-pos="close">Close</button><button class="x" data-pos="${inc}" title="${inc} more, into this position">Increase</button><button class="x" data-pos="${dec}" title="${dec} part of this position">Decrease</button></td></tr>`;
+      }).join("");
       S.posKey = key;
     }
-    const f = (k, v) => { const el = tb.querySelector(`[data-f="${k}"]`); if (el.textContent !== v) el.textContent = v; };
-    f("size", qty(P.size)); f("value", F2.format(P.value)); f("entry", px(P.entry_price));
-    f("avg", px(P.avg_price)); f("mark", px(P.x_prime)); f("upnl", signed(P.unrealised));
-    f("opened", P.opened_tick == null ? "—" : "t " + F0.format(P.opened_tick));
-    tb.querySelector('[data-f="upnl"]').className = "num " + cls(P.unrealised);
+    for (const p of list) {
+      const row = tb.querySelector(`tr[data-id="${p.id}"]`);
+      const f = (k, v) => { const el = row.querySelector(`[data-f="${k}"]`); if (el.textContent !== v) el.textContent = v; };
+      f("size", qty(p.size)); f("value", F2.format(p.value)); f("entry", px(p.entry_price));
+      f("avg", px(p.avg_price)); f("mark", px(p.x_prime)); f("upnl", signed(p.unrealised));
+      f("real", p.realised ? signed(p.realised) : "—"); f("opened", "t " + F0.format(p.opened_tick));
+      row.querySelector('[data-f="upnl"]').className = "num " + cls(p.unrealised);
+      row.querySelector('[data-f="real"]').className = "num " + cls(p.realised);
+    }
+    if (S.link && !S.positions.has(S.link.id)) setLink(null);       // its position closed
   }
   $("#t-pos").addEventListener("click", (e) => {
     const b = e.target.closest("[data-pos]");
-    const P = S.position;
-    if (!b || !P || !P.side) return;
+    if (!b) return;
+    const P = S.positions && S.positions.get(+b.closest("tr").dataset.id);
+    if (!P) return;
     const what = b.dataset.pos;
     if (what === "close") {
-      // close = the whole position at market: sell a long, buy back a short
+      // close = this position's whole size at market, booked into this position
       $("#f-submit").disabled = true;
-      worker.postMessage({ type: "order", order: { side: P.side === "long" ? "sell" : "buy", kind: "market", qty: P.size } });
+      worker.postMessage({ type: "order", order: { side: P.side === "long" ? "sell" : "buy", kind: "market", qty: P.size, pos_id: P.id } });
       return;
     }
-    // increase / decrease: set up the order form, the amount is yours to choose
+    // increase / decrease: the order form, linked to this position; the amount is yours
     setSide(what); setKind("market");
     if (S.unit !== "RCC") { S.unit = "RCC"; refreshForm(); }
     $("#f-qty").value = ""; $("#f-pct").value = 0; updateTotal();
+    setLink({ id: P.id, mode: what === (P.side === "long" ? "buy" : "sell") ? "Adding to" : "Reducing" });
     $("#f-qty").focus();
   });
+  // the order form's link to a position (Increase / Decrease); cleared on submit or ✕
+  function setLink(link) {
+    S.link = link;
+    $("#f-link").classList.toggle("hidden", !link);
+    if (link) $("#f-link-txt").textContent = `${link.mode} position #${link.id}`;
+  }
+  $("#f-link-x").onclick = () => setLink(null);
 
   function renderHistory() {
     const list = [...S.orders.values()].filter((o) => !["open", "partial"].includes(o.status)).sort((a, b) => b.id - a.id).slice(0, 500);
@@ -622,6 +648,7 @@
     } else if (S.unit === "EUR") o.eur_amount = q;
     else o.qty = q;
     $("#f-submit").disabled = true;
+    if (S.link) { o.pos_id = S.link.id; setLink(null); }       // Increase / Decrease
     worker.postMessage({ type: "order", order: o });
   };
   setSide("buy"); setKind("limit");
