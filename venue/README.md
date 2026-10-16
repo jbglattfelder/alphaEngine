@@ -7,6 +7,9 @@ the browser (Pyodide, Python compiled to WebAssembly), so there is no server.
 Each browser tab owns its own market, and "New market" discards it and builds
 a fresh one. Nothing persists beyond the tab.
 
+Sign in with username **liquidity**, password **engine**. This is a
+courtesy gate, not protection (see Security).
+
 ## The frozen engine
 
 The venue imports `simulation_mvp.py` from the repository root, unchanged. It
@@ -33,7 +36,7 @@ where you hold coins but never trade is bit-for-bit the engine's own run.
 | setting | meaning |
 |---|---|
 | arm | **NNNN**: capital, bands, timer and order size all drawn per agent from normal distributions; tp/sl are the means, cv 0.3. **PFCF**: Pareto capital, fixed bands (every agent uses exactly tp/sl), clock timer, fixed size |
-| n | agents per side (population 2n) |
+| n | agents per side (population 2n), at most 10,000. Speed in Chromium falls roughly as 1/n: about 450 ticks/s at 150, 70 at 1,000, 11 at 7,500, 7 at 10,000 |
 | K | the crowd's total capital, EUR |
 | tp, sl | take-profit / stop-loss band, log distance from entry |
 | c | clock rate (pressure per tick), default 0.004 |
@@ -45,11 +48,18 @@ Settings cannot be changed while a market runs; open a new market instead.
 
 ## Time
 
-A tick is one engine step, not a second. Play/pause and the ticks-per-second
-dial drive a loop in a Web Worker. Your orders are applied between ticks:
+A tick is one engine step, not a second. A new market starts playing at once,
+at the middle of the dial (22 ticks/s). Play/pause (or the space bar) and the
+ticks-per-second dial drive a loop in a Web Worker. Your orders are applied between ticks:
 JavaScript is single-threaded, so a message from the page can only be handled
 between two engine steps. The header shows the tick counter and your local
 clock. At n = 150 Chromium sustains about 450 ticks/s.
+
+The price chart draws one point per tick (the last print) and a volume bar per
+tick (RCC printed since the previous tick; a trade you make between ticks
+counts towards the next bar; green when the price did not fall). You can zoom
+out until the whole session fits. Each of your trades gets one arrow, however
+many makers it filled against.
 
 ## Orders
 
@@ -96,6 +106,32 @@ An empty side falls back to the last price.
 - A test reproduces every row of the paper's SOL/USDT table (pᵇ, pᵠ, Wᵠ).
 - At a single price (x′ = last) the agents' PnL plus yours sums to zero
   (tested).
+
+## Security
+
+There is no server, no database and no account: everything runs in the
+viewer's own browser, and nothing anyone types reaches anyone else. Nobody can
+post content that other players see, so there is nothing to plant spam links
+in. The only text rendered as HTML is numbers and fixed strings, and the two
+free-text fields (order notes, counterparty ids) are escaped.
+
+- **Content-Security-Policy** (in `index.html`): scripts only from this site,
+  `unpkg.com` and `cdn.jsdelivr.net`, plus WebAssembly; no plugins, no
+  `<base>` rewrites, no form submissions; network access only to this site
+  and jsDelivr.
+- **Subresource Integrity**: Lightweight Charts carries a `sha384` hash, so a
+  tampered copy on unpkg is refused. CI checks that the live file still
+  matches the hash.
+- **Pinned versions**: Pyodide 0.27.7 from jsDelivr (versioned URLs do not
+  change). Pyodide checks every package it loads (numpy) against the sha256
+  in its lock file.
+- **The sign-in is not security.** A static site cannot keep a secret: the
+  check runs in the page and only the SHA-256 of `liquidity:engine` is
+  shipped, so the password is not readable at a glance. Anyone can still
+  read the source, and there is nothing behind the gate worth protecting.
+- **Residual risk**: a compromise of jsDelivr itself (the Pyodide core files
+  have no integrity hash). Self-hosting Pyodide next to the site would remove
+  it, at the cost of about 15 MB in the deploy.
 
 ## Running locally
 

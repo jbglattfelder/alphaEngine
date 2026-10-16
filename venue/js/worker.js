@@ -125,6 +125,7 @@ self.onmessage = async (ev) => {
     switch (m.type) {
       case "init": {
         playing = false;
+        if (m.fixedNow != null) { const now = m.fixedNow; Date.now = () => now; }   // ?e2e only
         await boot();
         post({ type: "loading", msg: "Building the crowd…" });
         const out = JSON.parse(api.new(JSON.stringify(m.cfg)));

@@ -39,13 +39,27 @@
   };
 
   // ═════════════ 1. sign in ═════════════
-  $("#btn-login").onclick = () => {
-    S.name = $("#login-name").value.trim() || "Trader";
+  // A gate, not security: the site is static, so the check runs in the page.
+  // Only the SHA-256 of "user:password" is shipped, not the password itself.
+  const LOGIN_SHA256 = "416b8774416750341da8e44b95de13ab24add867e576ec904409919b9dfefff5";
+  async function sha256hex(text) {
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  $("#btn-login").onclick = async () => {
+    const user = $("#login-name").value.trim(), pass = $("#login-pass").value;
+    if ((await sha256hex(`${user}:${pass}`)) !== LOGIN_SHA256) {
+      $("#login-err").textContent = "Wrong username or password";
+      return;
+    }
+    $("#login-err").textContent = "";
+    S.name = user;
     $("#avatar").textContent = S.name[0].toUpperCase();
     $("#avatar").title = S.name;
     show("#screen-config");
     updateAlloc();
   };
+  $$("#screen-login input").forEach((i) => i.addEventListener("input", () => ($("#login-err").textContent = "")));
   $$("#screen-login input").forEach((i) => i.addEventListener("keydown", (e) => { if (e.key === "Enter") $("#btn-login").click(); }));
 
   // ═════════════ 2. configure ═════════════
@@ -76,7 +90,7 @@
     $("#alloc-max").textContent = `max ${F0.format(max)} EUR`;
   }
   function validate(c) {
-    if (!(c.n >= 1 && c.n <= 1000)) return "n must be between 1 and 1000 agents per side";
+    if (!(c.n >= 1 && c.n <= 10000)) return "n must be between 1 and 10,000 agents per side";
     if (!(c.K > 0)) return "K must be positive";
     if (!(c.tp > 0 && c.sl > 0)) return "take profit and stop loss must be positive";
     if (!(c.c > 0)) return "c must be positive";
@@ -93,7 +107,8 @@
     if (err) return;
     S.cfg = c;
     show("#screen-loading");
-    worker.postMessage({ type: "init", cfg: c });
+    // ?e2e: the worker's clock is frozen to the page's (tests freeze both)
+    worker.postMessage({ type: "init", cfg: c, fixedNow: params.has("e2e") ? Date.now() : null });
   };
 
   // ═════════════ worker ═════════════
@@ -103,12 +118,19 @@
   // Test hooks for venue/e2e, only with ?e2e in the URL. step(k) runs exactly
   // k ticks while paused; sync() resolves once the worker has handled every
   // earlier message and the page has rendered its replies.
-  if (new URLSearchParams(location.search).has("e2e")) {
+  const params = new URLSearchParams(location.search);
+  // a market starts playing on open; under ?e2e only with &autoplay (tests step it)
+  const AUTOPLAY = !params.has("e2e") || params.has("autoplay");
+  if (params.has("e2e")) {
     let pid = 0;
     const sync = () => new Promise((r) => { const id = ++pid; pongs.set(id, r); worker.postMessage({ type: "ping", id }); });
     window.__rpm = {
       sync,
       step: (k) => { worker.postMessage({ type: "stepN", k }); return sync(); },
+      tape: () => series.data().map((d) => [d.time, d.value]),        // the chart's tick tape
+      volumes: () => volume.data().map((d) => d.value),
+      markers: () => S.markers.length,
+      visible: () => chart.timeScale().getVisibleLogicalRange(),
     };
   }
   worker.onmessage = (ev) => {
@@ -128,7 +150,7 @@
   };
 
   // ═════════════ 3. the venue ═════════════
-  let chart, series;
+  let chart, series, volume;
   function onReady(m) {
     resetVenue();
     show("#screen-trade");
@@ -137,11 +159,14 @@
     onUpdate({ step: null, snap: m.snap });
     S.lastPrice = m.snap.market.price;
     series.setData([{ time: 0, value: m.snap.market.price }]);
+    volume.setData([{ time: 0, value: 0, color: VOL_UP }]);
     S.chartData = 1;
+    S.prevPrice = m.snap.market.price;
     setPlaying(false);
     worker.postMessage({ type: "speed", tps: S.tps });
     pushView();
-    toast(`Market open · ${2 * m.config.n} agents · ${m.config.arm} · seed ${m.config.seed}. Press play.`, "ok");
+    toast(`Market open · ${2 * m.config.n} agents · ${m.config.arm} · seed ${m.config.seed}.${AUTOPLAY ? "" : " Press play."}`, "ok");
+    if (AUTOPLAY) { setPlaying(true); worker.postMessage({ type: "play" }); }
   }
   function resetVenue() {
     S.orders.clear(); S.fills = []; S.tape = []; S.markers = [];
@@ -156,19 +181,29 @@
       autoSize: true,
       layout: { background: { color: "#141519" }, textColor: "#8a919e", fontFamily: getComputedStyle(document.body).fontFamily },
       grid: { vertLines: { color: "#1d2026" }, horzLines: { color: "#1d2026" } },
-      rightPriceScale: { borderColor: "#262a31" },
-      timeScale: { borderColor: "#262a31", tickMarkFormatter: (t) => "t " + F0.format(t), rightOffset: 6 },
+      rightPriceScale: { borderColor: "#262a31", scaleMargins: { top: 0.08, bottom: 0.24 } },
+      // minBarSpacing: zoom out until the whole session fits (default 0.5 px per tick)
+      timeScale: { borderColor: "#262a31", tickMarkFormatter: (t) => "t " + F0.format(t), rightOffset: 6, minBarSpacing: 0.001 },
       localization: { timeFormatter: (t) => "tick " + F0.format(t), priceFormatter: (p) => F2.format(p) },
       crosshair: { mode: 0 },
     });
     series = chart.addLineSeries({ color: "#3773f5", lineWidth: 2, priceLineColor: "#3773f5", lastValueVisible: true });
+    // volume per tick (RCC), on its own scale in the bottom fifth
+    volume = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" },
+      lastValueVisible: false, priceLineVisible: false });
+    chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
   }
+  const VOL_UP = "rgba(39, 173, 117, 0.45)", VOL_DN = "rgba(240, 97, 109, 0.45)";
 
   function onUpdate(m) {
     const st = m.step;
     if (st) {
       if (st.ticks.length) {
-        for (const [t, p] of st.ticks) series.update({ time: t, value: p });
+        for (const [t, p, v] of st.ticks) {
+          series.update({ time: t, value: p });
+          volume.update({ time: t, value: v, color: p >= S.prevPrice ? VOL_UP : VOL_DN });
+          S.prevPrice = p;
+        }
         S.chartData += st.ticks.length;
         if (S.chartData > 300000) trimChart();
       }
@@ -183,6 +218,7 @@
     // keep the most recent 150k ticks on screen
     const data = series.data().slice(-150000);
     series.setData(data);
+    volume.setData(volume.data().slice(-150000));
     S.chartData = data.length;
   }
 
@@ -215,7 +251,11 @@
     if (!list.length) return;
     for (const f of list) {
       S.fills.unshift(f);
-      S.markers.push({ time: f.tick, position: f.side === "buy" ? "belowBar" : "aboveBar",
+      // one arrow per order and tick: a market order that sweeps several
+      // makers is one trade decision, not a column of arrows
+      const key = `${f.tick}:${f.side}:${f.order}`;
+      if (S.markers.some((k) => k.key === key)) continue;
+      S.markers.push({ key, time: f.tick, position: f.side === "buy" ? "belowBar" : "aboveBar",
         color: f.side === "buy" ? "#27ad75" : "#f0616d", shape: f.side === "buy" ? "arrowUp" : "arrowDown", text: "" });
     }
     if (S.fills.length > 2000) S.fills.length = 2000;
@@ -406,7 +446,7 @@
     $("#speed-val").textContent = S.tps;
     worker.postMessage({ type: "speed", tps: S.tps });
   });
-  $("#speed").value = 37; S.tps = speedFromDial(37); $("#speed-val").textContent = S.tps;
+  $("#speed").value = 50; S.tps = speedFromDial(50); $("#speed-val").textContent = S.tps;
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" && !$("#screen-trade").classList.contains("hidden") && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) {
       e.preventDefault(); $("#btn-play").click();

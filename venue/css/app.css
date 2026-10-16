@@ -31,9 +31,10 @@ button, input, select { font: inherit; color: inherit; }
 .err { color: var(--dn); min-height: 1.2em; margin: 8px 0 0; }
 
 /* ── logo ─────────────────────────────────────────────── */
-.logo { width: 34px; height: 34px; border-radius: 50%; flex: none; display: inline-block;
-  background: var(--rose) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 7c4 3 6 6 6 9a6 6 0 0 1-12 0c0-3 2-6 6-9z' fill='%23fff'/%3E%3Cpath d='M11 19c1.5 2.5 3 3.4 5 3.4s3.5-.9 5-3.4' stroke='%23e8496b' stroke-width='1.4' fill='none'/%3E%3C/svg%3E") center/100% no-repeat; }
-.logo.spin { width: 54px; height: 54px; animation: pulse 1.4s ease-in-out infinite; }
+.logo { width: 34px; height: 34px; flex: none; display: inline-block;
+  background: url("../img/logo.png") center / contain no-repeat; }
+.brand-lg .logo { width: 44px; height: 44px; }
+.logo.spin { width: 64px; height: 64px; animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 50% { transform: scale(.88); opacity: .7; } }
 
 /* ── pre-trade screens ────────────────────────────────── */

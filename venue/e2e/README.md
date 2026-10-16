@@ -6,7 +6,8 @@ alter the GUI or UX by accident.
 | spec | what it pins |
 |---|---|
 | `visual.spec.js` | every screen, tab and form mode, pixel for pixel, at 0 px tolerance. Covers sign-in, configure (also PFCF selected and over the cap), loading, the trading screen on desktop, tablet and phone, the price and depth charts, the order book (exact and grouped), recent trades, the four bottom tabs, the order form in its five modes plus a filled-in limit order, and toasts. Baselines are in `__screenshots__/` |
-| `behaviour.spec.js` | what the venue does: validation, play/pause/space/speed dial, seed determinism, New market, limit/market/cancel/cancel all, rejections, form helpers (book click, BID/MID/ASK, %, unit switch), PnL adding up, no phone-width scroll, no console errors (asserted in every test) |
+| `behaviour.spec.js` | what the venue does: sign-in (liquidity / engine), validation (n ≤ 10,000), autoplay at medium speed, play/pause/space/speed dial, seed determinism, New market, limit/market/cancel/cancel all, rejections, form helpers (book click, BID/MID/ASK, %, unit switch), one arrow per trade, volume bars, zoom-out, PnL adding up, no phone-width scroll, no console errors (asserted in every test) |
+| `tape.spec.js` | the GUI against the engine: n = 2, both arms, 20,000 ticks in the browser, with the price chart's tick tape compared bit for bit (sha256 of the float64s) with the bare engine's, run natively (`../tests/reference_tape_n2.json`, which pytest regenerates and checks) |
 
 ## Why the pixels are stable
 
@@ -15,9 +16,12 @@ alter the GUI or UX by accident.
   `window.__rpm.step(k)`, which runs exactly k ticks while paused. They never
   advance it by wall time.
 - **The clock is frozen.** The page's `Date` is fixed (09:31:25, 15 Oct 2026,
-  Europe/Zurich). The only cells that still show real time are those carrying
-  the worker's wall time (the time column of the order and trade tables), and
-  they are masked.
+  Europe/Zurich), and with `?e2e` the page hands that instant to the worker,
+  so the order and trade tables' time column is frozen too.
+- **The pointer is parked** in the top-left corner before every screenshot.
+  Hover changes pixels (number spinners, row highlights).
+- **Autoplay is off under `?e2e`** (tests step the market themselves).
+  `&autoplay` turns it back on for the autoplay test.
 - **The rendering is pinned.** Everything runs in
   `mcr.microsoft.com/playwright:v1.56.1-noble`, pinned by digest in CI: the
   same browser build and the same fonts, locally and in CI.

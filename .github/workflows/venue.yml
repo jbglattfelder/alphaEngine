@@ -19,6 +19,11 @@ jobs:
       - run: pip install "numpy>=1.26" pytest
       - name: Engine and validator are byte-identical to tag v1.0-paper
         run: sha256sum -c venue/FROZEN.sha256
+      - name: Live CDN files match the pinned integrity hashes
+        run: |
+          want=$(grep -o 'sha384-[A-Za-z0-9+/=]*' venue/index.html)
+          got="sha384-$(curl -fsSL https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js | openssl dgst -sha384 -binary | openssl base64 -A)"
+          echo "index.html: $want"; echo "unpkg:      $got"; test "$want" = "$got"
       - name: Frozen validator
         run: python validate_simulation_mvp.py
       - name: Venue wrapper tests
@@ -74,7 +79,7 @@ jobs:
         run: |
           mkdir -p _site/venue/py
           cp simulation_mvp.py _site/
-          cp -r venue/index.html venue/css venue/js _site/venue/
+          cp -r venue/index.html venue/css venue/js venue/img _site/venue/
           cp venue/py/venue_wrapper.py _site/venue/py/
           printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=venue/"><title>RPM Exchange</title><a href="venue/">RPM Exchange</a>\n' > _site/index.html
       - uses: actions/upload-pages-artifact@v3

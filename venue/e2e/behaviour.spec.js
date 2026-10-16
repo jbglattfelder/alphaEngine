@@ -4,18 +4,37 @@ const { test, expect, signIn, configure, launch, openMarket, step, sync, quick, 
 const num = async (page, sel) => parseFloat((await page.textContent(sel)).replace(/[^0-9.\-]/g, ""));
 const tick = (page) => num(page, "#hdr-tick");
 
-test("sign-in shows the name's initial; configure validates and clears errors", async ({ page }) => {
-  await signIn(page, "ada");
-  await expect(page.locator("#avatar")).toHaveText("A");
+test("sign-in needs liquidity / engine", async ({ page }) => {
+  await page.goto("./?e2e");
+  for (const [u, p] of [["liquidity", "wrong"], ["someone", "engine"], ["", ""]]) {
+    await page.fill("#login-name", u);
+    await page.fill("#login-pass", p);
+    await page.click("#btn-login");
+    await expect(page.locator("#login-err")).toHaveText("Wrong username or password");
+    await expect(page.locator("#screen-login")).toBeVisible();
+  }
+  await page.fill("#login-pass", "x");
+  await expect(page.locator("#login-err")).toHaveText("");          // typing clears it
+  await page.fill("#login-name", "liquidity");
+  await page.fill("#login-pass", "engine");
+  await page.locator("#login-pass").press("Enter");
+  await expect(page.locator("#screen-config")).toBeVisible();
+  await expect(page.locator("#avatar")).toHaveText("L");
+});
+
+test("configure validates and clears errors", async ({ page }) => {
+  await signIn(page);
   await configure(page, { eur: 800000 });
   await page.click("#btn-launch");
   await expect(page.locator("#cfg-err")).toHaveText("your allocation exceeds 75% of K");
   await page.fill("#cfg-eur", "50000");
   await expect(page.locator("#cfg-err")).toHaveText("");
-  await configure(page, { n: 0 });
-  await page.click("#btn-launch");
-  await expect(page.locator("#cfg-err")).not.toHaveText("");
-  await expect(page.locator("#screen-config")).toBeVisible();
+  for (const n of [0, 10001]) {
+    await configure(page, { n });
+    await page.click("#btn-launch");
+    await expect(page.locator("#cfg-err")).toHaveText("n must be between 1 and 10,000 agents per side");
+    await expect(page.locator("#screen-config")).toBeVisible();
+  }
 });
 
 test("PFCF note and arm label", async ({ page }) => {
@@ -167,4 +186,52 @@ test("no horizontal scroll at phone width", async ({ page }) => {
   await openMarket(page);
   await step(page, 100);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+});
+
+test("n = 10,000 per side opens", async ({ page }) => {
+  await openMarket(page, { n: 10000 });
+  await expect(page.locator("#hdr-alive")).toHaveText("20000 / 20000");
+  await step(page, 3);
+  expect(await tick(page)).toBe(3);
+});
+
+test("a market starts playing by itself at medium speed", async ({ page }) => {
+  await signIn(page, undefined, undefined, "?e2e&autoplay");
+  await launch(page);
+  await expect(page.locator("#speed-val")).toHaveText("22");
+  await expect(page.locator("#play-icon")).toHaveAttribute("d", "M7 5h4v14H7zM13 5h4v14h-4z");   // pause glyph
+  await expect.poll(() => tick(page), { timeout: 15_000 }).toBeGreaterThan(10);
+  await page.click("#btn-play");
+});
+
+test("one arrow per trade, however many makers it sweeps", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 300);
+  await order(page, { side: "buy", kind: "market", qty: 30 });
+  await page.click(".tabs[data-group=bottom] button[data-tab=fills]");
+  expect(await page.locator("#t-fills tr").count()).toBeGreaterThan(1);    // several makers…
+  expect(await page.evaluate(() => window.__rpm.markers())).toBe(1);       // …one arrow
+  await order(page, { side: "sell", kind: "market", qty: 10 });
+  expect(await page.evaluate(() => window.__rpm.markers())).toBe(2);
+});
+
+test("volume bars: one per tick, adding up to the session volume", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 500);
+  await order(page, { side: "buy", kind: "market", qty: 3 });
+  await step(page, 100);
+  const vols = await page.evaluate(() => window.__rpm.volumes());
+  expect(vols.length).toBe(601);                                            // tick 0 … 600
+  const total = vols.reduce((a, b) => a + b, 0);
+  expect(Math.abs(total - (await num(page, "#hdr-vol")))).toBeLessThan(0.01);
+});
+
+test("the price chart zooms out to the whole session", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 6000);
+  const box = await page.locator("#chart").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let i = 0; i < 60; i++) await page.mouse.wheel(0, 400);
+  const r = await page.evaluate(() => window.__rpm.visible());
+  expect(r.to - r.from).toBeGreaterThanOrEqual(6000);
 });

@@ -1,7 +1,7 @@
 // Shared setup for the venue's e2e tests.
 //
 // Determinism: the engine is bit-deterministic for a given Config; the page's
-// Date is frozen; the CDNs are replaced by pinned local copies; the market is
+// Date is frozen, and with ?e2e the page hands the same instant to the worker; the CDNs are replaced by pinned local copies; the market is
 // advanced with the ?e2e step hook (exactly k ticks, paused), never by wall
 // time. Two runs of a test therefore see the same pixels.
 const fs = require("fs");
@@ -25,7 +25,8 @@ async function routeCdns(ctx) {
       headers: { "access-control-allow-origin": "*" } });
   });
   await ctx.route(/unpkg\.com\/lightweight-charts@4\.2\.0\//, (route) =>
-    route.fulfill({ status: 200, body: fs.readFileSync(LWC), contentType: "text/javascript" }));
+    route.fulfill({ status: 200, body: fs.readFileSync(LWC), contentType: "text/javascript",
+      headers: { "access-control-allow-origin": "*" } }));          // SRI needs CORS
 }
 
 const test = base.extend({
@@ -42,11 +43,13 @@ const test = base.extend({
   },
 });
 
-const DEFAULTS = { name: "Ada", arm: "NNNN", n: 150, K: 1000000, tp: 1, sl: 1, c: 0.004, q: 8, seed: 9, eur: 50000, rcc: 500 };
+const LOGIN = { user: "liquidity", pass: "engine" };
+const DEFAULTS = { name: LOGIN.user, arm: "NNNN", n: 150, K: 1000000, tp: 1, sl: 1, c: 0.004, q: 8, seed: 9, eur: 50000, rcc: 500 };
 
-async function signIn(page, name = DEFAULTS.name) {
-  await page.goto("./?e2e");
+async function signIn(page, name = LOGIN.user, pass = LOGIN.pass, query = "?e2e") {
+  await page.goto("./" + query);
   await page.fill("#login-name", name);
+  await page.fill("#login-pass", pass);
   await page.click("#btn-login");
   await expect(page.locator("#screen-config")).toBeVisible();
 }
@@ -104,7 +107,4 @@ async function referenceSession(page) {
   await step(page, 200);
 }
 
-// Cells that carry the worker's wall time (not under the frozen page clock)
-const wallTimeCells = (page) => [page.locator("#t-open td:first-child, #t-hist td:first-child, #t-fills td:first-child")];
-
-module.exports = { test, expect, DEFAULTS, signIn, configure, launch, openMarket, step, sync, quick, order, referenceSession, wallTimeCells };
+module.exports = { test, expect, LOGIN, DEFAULTS, signIn, configure, launch, openMarket, step, sync, quick, order, referenceSession };
