@@ -1,0 +1,3 @@
+/* Applied only while a screenshot is taken. Toasts are transient (4.2 s
+   timers) and get their own shot in visual.spec.js. */
+#toasts { visibility: hidden !important; }

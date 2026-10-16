@@ -570,11 +570,13 @@ class Venue:
         self.t = 0
         self.alive = True
         self._log_pos = 0
+        self._vol_mark = 0.0
 
     # ── time ────────────────────────────────────────────────────────────────
     def step(self, k: int = 1, max_prints: int = 300) -> dict:
-        """Run k ticks. Returns the per-tick price tape, the prints (newest
-        last, at most max_prints), the human's fills and order updates."""
+        """Run k ticks. Returns the per-tick tape [tick, price, volume], the
+        prints (newest last, at most max_prints), the human's fills and order
+        updates."""
         sim = self.sim
         ticks: list[list[float]] = []
         prints: list[list] = []
@@ -583,7 +585,10 @@ class Venue:
                 break
             self.t += 1
             keep = sim.step(self.t)
-            ticks.append([self.t, sim.p])
+            # [tick, last price, RCC volume printed since the previous tick
+            #  (a human trade between ticks counts towards the next one)]
+            ticks.append([self.t, sim.p, sim.volume - self._vol_mark])
+            self._vol_mark = sim.volume
             self.alive = keep
             if self.t % self.TRIM_EVERY == 0:
                 self._collect_prints(prints, max_prints)

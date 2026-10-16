@@ -59,7 +59,7 @@ def test_trim_keeps_the_run_identical():
     v.TRIM_EVERY = 250
     got = []
     for _ in range(20):
-        got += [p for _, p in v.step(100)["ticks"]]
+        got += [row[1] for row in v.step(100)["ticks"]]
     assert got == prices
 
 
@@ -206,3 +206,36 @@ def test_paper_pnl_split_adds_up():
     assert L.b == -2.0 and L.avg_price() == 120.0
     for x in (90.0, 120.0, 150.0):
         assert abs(L.realised + L.unrealised(x) - L.total_q(x)) < 1e-9
+
+
+def test_tick_volume_adds_up_to_session_volume():
+    v = Venue(n=60, seed=4, arm="NNNN", user_eur=20_000, user_rcc=200)
+    vol = sum(row[2] for row in v.step(300)["ticks"])
+    v.place("buy", "market", qty=2.0)                 # between ticks: lands in the next bar
+    vol += sum(row[2] for row in v.step(300)["ticks"])
+    assert abs(vol - v.sim.volume) < 1e-9 * max(1.0, v.sim.volume)
+
+
+def test_reference_tape_is_the_engines():
+    """The committed n=2 reference (used by e2e/tape.spec.js) is a fresh run
+    of the bare engine, so the GUI is compared with the engine itself."""
+    import json
+    sys.path.insert(0, HERE)
+    import reference_tape
+    with open(reference_tape.PATH) as f:
+        committed = json.load(f)
+    assert committed == json.loads(json.dumps(reference_tape.build()))
+
+
+def test_wrapper_reproduces_the_reference_tape():
+    """The venue (wrapper + idle human with zero allocation) prints the same tape."""
+    import hashlib, json
+    sys.path.insert(0, HERE)
+    import reference_tape
+    with open(reference_tape.PATH) as f:
+        ref = json.load(f)
+    for c in ref["cases"]:
+        v = Venue(n=c["n"], seed=c["seed"], arm=c["arm"])
+        prices = [X0] + [row[1] for row in v.step(c["T"])["ticks"]]
+        hexes = "".join(reference_tape.fhex(p) for p in prices)
+        assert hashlib.sha256(hexes.encode()).hexdigest() == c["sha256"], c["arm"]

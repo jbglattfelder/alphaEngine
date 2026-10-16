@@ -18,3 +18,8 @@ tmp/
 /orderbook_*.png
 /scaling_laws_*.png
 /stylized_facts_*.png
+# venue e2e: dependencies, the fetched Pyodide copy and test output
+/venue/e2e/node_modules/
+/venue/e2e/pyodide-cache/
+/venue/e2e/test-results/
+/venue/e2e/playwright-report/

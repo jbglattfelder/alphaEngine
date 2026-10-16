@@ -2,6 +2,7 @@
  *
  * Messages in:  init{cfg} | play | pause | speed{tps} | order{...} | cancel{id}
  *               | cancelAll | view{group, depth}
+ *               | stepN{k} | ping{id}            (test hooks, see app.js ?e2e)
  * Messages out: loading{msg} | ready{snap, config} | update{step, snap, depth}
  *               | result{...} | error{msg}
  *
@@ -124,6 +125,7 @@ self.onmessage = async (ev) => {
     switch (m.type) {
       case "init": {
         playing = false;
+        if (m.fixedNow != null) { const now = m.fixedNow; Date.now = () => now; }   // ?e2e only
         await boot();
         post({ type: "loading", msg: "Building the crowd…" });
         const out = JSON.parse(api.new(JSON.stringify(m.cfg)));
@@ -135,6 +137,15 @@ self.onmessage = async (ev) => {
         playing = true; lastT = performance.now(); acc = Math.max(acc, 1);
         rateT0 = lastT; tickCount = 0;
         schedule(0);
+        break;
+      case "stepN": {                    // test hook: exactly k ticks, paused
+        if (!api || playing) return;
+        const out = JSON.parse(api.step(m.k, group, wantDepth));
+        post({ type: "update", ...out });
+        break;
+      }
+      case "ping":                        // test hook: every earlier message is done
+        post({ type: "pong", id: m.id });
         break;
       case "pause":
         playing = false; clearTimeout(timer); acc = 0; rate = 0;
