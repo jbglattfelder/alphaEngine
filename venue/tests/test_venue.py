@@ -239,3 +239,21 @@ def test_wrapper_reproduces_the_reference_tape():
         prices = [X0] + [row[1] for row in v.step(c["T"])["ticks"]]
         hexes = "".join(reference_tape.fhex(p) for p in prices)
         assert hashlib.sha256(hexes.encode()).hexdigest() == c["sha256"], c["arm"]
+
+
+def test_position_entry_price_and_side():
+    L = PaperPnL(B=1.0, Q=100.0)
+    assert L.view(100.0)["side"] is None
+    L.fill(+2, 100.0, tick=5)
+    L.fill(+2, 110.0, tick=6)                       # add: entry stays, x-bar moves
+    v = L.view(120.0, bid=119.0, ask=121.0)
+    assert (v["side"], v["size"], v["entry_price"], v["opened_tick"]) == ("long", 4.0, 100.0, 5)
+    assert v["avg_price"] == 105.0 and v["value"] == 4 * 119.0
+    L.fill(-1, 120.0, tick=7)                       # reduce: still the same position
+    assert L.view(120.0)["entry_price"] == 100.0
+    L.fill(-5, 130.0, tick=8)                       # flip: short 2 opened at 130
+    v = L.view(125.0, bid=124.0, ask=126.0)
+    assert (v["side"], v["size"], v["entry_price"], v["opened_tick"]) == ("short", 2.0, 130.0, 8)
+    L.fill(+2, 125.0, tick=9)                       # close
+    v = L.view(125.0)
+    assert (v["side"], v["entry_price"], v["opened_tick"]) == (None, None, None)

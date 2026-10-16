@@ -154,8 +154,16 @@ input[type=range] { accent-color: var(--accent); width: 100%; margin: 0; }
 .inp input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; padding: 10px 0; font-family: var(--mono); }
 .inp span, .unit { color: var(--muted); font-weight: 600; }
 .unit { background: var(--line); border: 0; border-radius: 5px; padding: 3px 8px; cursor: pointer; color: var(--text); }
-.pct-ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; }
-.pct-ticks a { cursor: pointer; } .pct-ticks a:hover { color: var(--text); }
+/* each label sits under the slider position it sets: the thumb (16 px) travels
+   from 8 px to (width - 8 px); the end labels are edge-aligned */
+.pct-ticks { position: relative; height: 1.4em; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.pct-ticks a { position: absolute; top: 0; cursor: pointer; transform: translateX(-50%); white-space: nowrap; }
+.pct-ticks a:hover { color: var(--text); }
+.pct-ticks a[data-p="0"] { left: 0; transform: none; }
+.pct-ticks a[data-p="25"] { left: calc(8px + (100% - 16px) * 0.25); }
+.pct-ticks a[data-p="50"] { left: calc(8px + (100% - 16px) * 0.5); }
+.pct-ticks a[data-p="75"] { left: calc(8px + (100% - 16px) * 0.75); }
+.pct-ticks a[data-p="100"] { left: auto; right: 0; transform: none; }
 .acct { border-top: 1px solid var(--line); padding: 12px; }
 .acct h3 { margin: 0 0 8px; font-size: 13px; }
 .acct .row { display: flex; justify-content: space-between; padding: 3px 0; color: var(--muted); }
@@ -169,6 +177,7 @@ td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowra
 td.num, th.num { text-align: right; font-family: var(--mono); }
 td .x { color: var(--muted); background: transparent; border: 1px solid var(--line-2); border-radius: 5px; cursor: pointer; padding: 2px 8px; }
 td .x:hover { color: var(--dn); border-color: var(--dn); }
+td.acts { display: flex; gap: 6px; }
 .empty { color: var(--muted); text-align: center; padding: 24px; margin: 0; }
 .st { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--line); }
 .st.filled { background: var(--up-bg); color: var(--up); }

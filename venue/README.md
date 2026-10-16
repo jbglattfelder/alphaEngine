@@ -49,7 +49,7 @@ Settings cannot be changed while a market runs; open a new market instead.
 ## Time
 
 A tick is one engine step, not a second. A new market starts playing at once,
-at the middle of the dial (22 ticks/s). Play/pause (or the space bar) and the
+at 6 ticks/s. Play/pause (or the space bar) and the
 ticks-per-second dial drive a loop in a Web Worker. Your orders are applied between ticks:
 JavaScript is single-threaded, so a message from the page can only be handled
 between two engine steps. The header shows the tick counter and your local
@@ -59,7 +59,10 @@ The price chart draws one point per tick (the last print) and a volume bar per
 tick (RCC printed since the previous tick; a trade you make between ticks
 counts towards the next bar; green when the price did not fall). You can zoom
 out until the whole session fits. Each of your trades gets one arrow, however
-many makers it filled against.
+many makers it filled against. Your open limit orders show as dotted lines (green buy, red sell), with no
+labels on the price axis; the Open orders tab has the details. Switching to the depth chart resets the price
+chart's zoom, scroll and price axis, so coming back always shows the live end
+of the curve.
 
 ## Orders
 
@@ -69,6 +72,17 @@ many makers it filled against.
 - **Limit**: whatever crosses fills at once, at maker prices. The rest rests
   at your limit until it is filled or you cancel it (GTC).
 - **Cancel**: one order, or all of them.
+- **Positions** tab: one pair, so at most one position. **Long** means net RCC
+  bought, **short** means net RCC sold (EUR bought). It shows size (RCC, and
+  EUR at x′), the entry price (the fill that opened it), the average price x̄
+  (Eq. 2), the mark x′, unrealised PnL and the opening tick. **Close** sends
+  a market order for the whole position. **Increase** / **Decrease** set up
+  the order form (side, market, cursor in the amount) and leave the amount to
+  you. A fill through zero closes the position and opens the opposite one.
+- **A far-away limit order can fill at once.** Agents enter at the opposite
+  touch, so when one side of the book is empty, your order *is* the touch and
+  the next entering agent takes it. A sell at 3× the price can fill on the
+  next tick in a thin market. That is the null model, not the venue.
 - Partial fills are allowed. There are no fees. Trading is spot only: resting
   orders lock their coins, and an order you cannot pay for is rejected.
 - **Self-trade prevention** is the engine's own rule (cancel-resting): an order
@@ -159,3 +173,9 @@ pass. One-time setup:
    not visible there.
 
 The site then lives at `https://<owner>.github.io/alphaEngine/venue/`.
+
+**Caching.** GitHub Pages lets browsers cache files for 10 minutes. The deploy
+stamps every file URL with the commit id: `__BUILD__` in `index.html` becomes
+`v=<commit>`, and `app.js` hands it on to the worker and the Python files. So
+a browser never runs a new page against an old cached `venue_wrapper.py`. It
+did once, which made the volume bars disappear without an error.

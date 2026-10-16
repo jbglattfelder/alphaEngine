@@ -11,6 +11,8 @@
  * (an order, a cancel) is only ever handled BETWEEN two batches, so human
  * orders always land between ticks. */
 
+// the deploy's version stamp, from our own URL (app.js sets it)
+const BUILD = new URL(self.location.href).searchParams.get("v") || "dev";
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/";
 // the frozen engine sits at the repo root, the wrapper next to the site
 const PY_FILES = { "simulation_mvp.py": "../../simulation_mvp.py", "venue_wrapper.py": "../py/venue_wrapper.py" };
@@ -76,7 +78,7 @@ async function boot() {
   post({ type: "loading", msg: "Loading the Alpha Engine…" });
   py.FS.mkdirTree("/venue");
   for (const [f, rel] of Object.entries(PY_FILES)) {
-    const r = await fetch(new URL(rel, self.location.href));
+    const r = await fetch(new URL(`${rel}?v=${encodeURIComponent(BUILD)}`, self.location.href));
     if (!r.ok) throw new Error("could not fetch " + f);
     py.FS.writeFile("/venue/" + f, await r.text());
   }

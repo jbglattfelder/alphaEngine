@@ -10,7 +10,7 @@
 <title>RPM Exchange</title>
 <meta name="description" content="RCC/EUR spot venue run by the Alpha Engine null model.">
 <link rel="icon" type="image/png" href="img/favicon.png">
-<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/app.css?v=__BUILD__">
 </head>
 <body>
 
@@ -156,7 +156,7 @@
         </div>
         <div class="pct">
           <input id="f-pct" type="range" min="0" max="100" step="1" value="0">
-          <div class="pct-ticks"><a data-p="25">25%</a><a data-p="50">50%</a><a data-p="75">75%</a><a data-p="100">Max</a></div>
+          <div class="pct-ticks"><a data-p="0">0%</a><a data-p="25">25%</a><a data-p="50">50%</a><a data-p="75">75%</a><a data-p="100">Max</a></div>
         </div>
         <div class="total"><span id="f-total-lbl">Total</span><b id="f-total">—</b></div>
         <button id="f-submit" class="btn buy wide">Buy RCC</button>
@@ -178,6 +178,7 @@
       <div class="tabs" data-group="bottom">
         <button class="on" data-tab="open">Open orders <span class="cnt" id="cnt-open">0</span></button>
         <button data-tab="hist">Order history</button>
+        <button data-tab="pos">Positions <span class="cnt" id="cnt-pos">0</span></button>
         <button data-tab="fills">Trade history</button>
         <button data-tab="assets">Assets &amp; PnL</button>
         <div class="spacer"></div>
@@ -190,6 +191,10 @@
       <div class="tabpane scroll" data-pane="hist">
         <table><thead><tr><th>Time</th><th>Tick</th><th>Side</th><th>Type</th><th>Price</th><th>Amount</th><th>Filled</th><th>Avg price</th><th>Status</th><th>Note</th></tr></thead><tbody id="t-hist"></tbody></table>
         <p class="empty" id="e-hist">No orders yet</p>
+      </div>
+      <div class="tabpane scroll" data-pane="pos">
+        <table><thead><tr><th>Market</th><th>Side</th><th class="num">Size (RCC)</th><th class="num">Value (EUR)</th><th class="num">Entry price</th><th class="num">Avg price x̄</th><th class="num">Mark x′</th><th class="num">Unrealised PnL</th><th class="num">Opened</th><th></th></tr></thead><tbody id="t-pos"></tbody></table>
+        <p class="empty" id="e-pos">No open position</p>
       </div>
       <div class="tabpane scroll" data-pane="fills">
         <table><thead><tr><th>Time</th><th>Tick</th><th>Side</th><th>Price</th><th>Amount (RCC)</th><th>Total (EUR)</th><th>Role</th><th>Counterparty</th><th>Realised</th></tr></thead><tbody id="t-fills"></tbody></table>
@@ -209,6 +214,9 @@
 <div id="toasts"></div>
 
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js" integrity="sha384-OK7vELvjHdhUFi31JYioPIcRHTROLdcDa6ZsNWgvgLaKj+9JqhU0Ad8g4wz3CXjA" crossorigin="anonymous"></script>
-<script src="js/app.js"></script>
+<!-- __BUILD__ is replaced by the commit id at deploy (.github/workflows/venue.yml),
+     and app.js passes it on to the worker and the Python files: a new deploy
+     never runs against files a browser cached from an older one -->
+<script src="js/app.js?v=__BUILD__"></script>
 </body>
 </html>

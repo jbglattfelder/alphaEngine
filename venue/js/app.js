@@ -2,6 +2,9 @@
 (() => {
   "use strict";
 
+  // the deploy's version stamp (see index.html), handed to every file loaded later
+  const BUILD = new URL(document.currentScript.src).searchParams.get("v") || "dev";
+
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const X0 = 100, MAX_FRAC = 0.75;
@@ -112,7 +115,7 @@
   };
 
   // ═════════════ worker ═════════════
-  const worker = new Worker("js/worker.js");
+  const worker = new Worker(`js/worker.js?v=${encodeURIComponent(BUILD)}`);
   const pongs = new Map();
 
   // Test hooks for venue/e2e, only with ?e2e in the URL. step(k) runs exactly
@@ -131,6 +134,8 @@
       volumes: () => volume.data().map((d) => d.value),
       markers: () => S.markers.length,
       visible: () => chart.timeScale().getVisibleLogicalRange(),
+      position: () => S.position && S.position.side ? S.position : null,
+      orderLines: () => [...S.priceLines.values()].map((pl) => pl.options()),
     };
   }
   worker.onmessage = (ev) => {
@@ -170,6 +175,7 @@
   }
   function resetVenue() {
     S.orders.clear(); S.fills = []; S.tape = []; S.markers = [];
+    S.openHtml = null; S.posKey = null; S.position = null;
     S.priceLines.clear();
     $("#banner").classList.add("hidden");
     $("#tape").innerHTML = "";
@@ -298,6 +304,7 @@
     renderAvail();
     renderOpen(s.open_orders);
     renderAssets(a, mk.price);
+    renderPosition(pnl);
     syncPriceLines(s.open_orders);
   }
   function setPnl(sel, v) { const el = $(sel); el.textContent = signed(v); el.className = cls(v); }
@@ -317,26 +324,77 @@
       $("#bk-spread").textContent = `Spread ${F4.format(sp)} (${F2.format(sp / mid * 1e4)} bps)`;
     } else $("#bk-spread").textContent = b.best_bid == null && b.best_ask == null ? "Book empty" : (b.best_bid == null ? "No bids" : "No asks");
   }
-  $("#screen-trade").addEventListener("click", (e) => {
+  // on press, not click: the book is redrawn every tick, so the row under the
+  // pointer at release is usually a new element and a click would not fire
+  $("#screen-trade").addEventListener("pointerdown", (e) => {
     const r = e.target.closest(".bk-side .bk-row");
-    if (r) { setKind("limit"); $("#f-price").value = (+r.dataset.p).toFixed(2); updateTotal(); }
+    if (r && e.button === 0) { setKind("limit"); $("#f-price").value = (+r.dataset.p).toFixed(2); updateTotal(); }
   });
 
   function renderOpen(list) {
     $("#cnt-open").textContent = list.length;
     $("#e-open").classList.toggle("hidden", list.length > 0);
-    $("#t-open").innerHTML = list.slice().reverse().map((o) => `<tr>
+    // redraw only when a row changed: replacing the table on every update (up to
+    // ~30/s while playing) swaps the Cancel button out between press and release,
+    // and the browser then drops the click
+    const html = list.slice().reverse().map((o) => `<tr>
       <td>${hms(o.wall * 1000)}</td><td class="num">${o.tick}</td>
       <td class="${o.side === "buy" ? "up" : "dn"}">${o.side.toUpperCase()}</td><td>${o.kind}</td>
       <td class="num">${px(o.price)}</td><td class="num">${qty(o.qty)}</td><td class="num">${qty(o.filled)}</td>
       <td class="num">${qty(o.remaining)}</td><td><span class="st ${o.status}">${o.status}</span></td>
       <td><button class="x" data-cancel="${o.id}">Cancel</button></td></tr>`).join("");
+    if (html !== S.openHtml) { $("#t-open").innerHTML = html; S.openHtml = html; }
   }
   $("#t-open").addEventListener("click", (e) => {
     const b = e.target.closest("[data-cancel]");
     if (b) worker.postMessage({ type: "cancel", id: +b.dataset.cancel });
   });
   $("#btn-cancel-all").onclick = () => worker.postMessage({ type: "cancelAll" });
+
+  // ── position: one pair, so at most one. Long = net RCC bought, short = net
+  // RCC sold (EUR bought). The row is built when the position opens or flips;
+  // after that only its numbers change, so its buttons stay clickable.
+  function renderPosition(P) {
+    S.position = P;
+    $("#cnt-pos").textContent = P.side ? 1 : 0;
+    $("#e-pos").classList.toggle("hidden", !!P.side);
+    const tb = $("#t-pos");
+    if (!P.side) { if (tb.firstChild) tb.innerHTML = ""; S.posKey = null; return; }
+    const key = `${P.side}:${P.opened_tick}`;
+    if (key !== S.posKey) {
+      const inc = P.side === "long" ? "buy" : "sell", dec = P.side === "long" ? "sell" : "buy";
+      tb.innerHTML = `<tr>
+        <td><b>RCC-EUR</b></td>
+        <td class="${P.side === "long" ? "up" : "dn"}">${P.side === "long" ? "LONG" : "SHORT"}</td>
+        <td class="num" data-f="size"></td><td class="num" data-f="value"></td>
+        <td class="num" data-f="entry"></td><td class="num" data-f="avg"></td><td class="num" data-f="mark"></td>
+        <td class="num" data-f="upnl"></td><td class="num" data-f="opened"></td>
+        <td class="acts"><button class="x" data-pos="close">Close</button><button class="x" data-pos="${inc}" title="${inc} more at market">Increase</button><button class="x" data-pos="${dec}" title="${dec} part at market">Decrease</button></td></tr>`;
+      S.posKey = key;
+    }
+    const f = (k, v) => { const el = tb.querySelector(`[data-f="${k}"]`); if (el.textContent !== v) el.textContent = v; };
+    f("size", qty(P.size)); f("value", F2.format(P.value)); f("entry", px(P.entry_price));
+    f("avg", px(P.avg_price)); f("mark", px(P.x_prime)); f("upnl", signed(P.unrealised));
+    f("opened", P.opened_tick == null ? "—" : "t " + F0.format(P.opened_tick));
+    tb.querySelector('[data-f="upnl"]').className = "num " + cls(P.unrealised);
+  }
+  $("#t-pos").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-pos]");
+    const P = S.position;
+    if (!b || !P || !P.side) return;
+    const what = b.dataset.pos;
+    if (what === "close") {
+      // close = the whole position at market: sell a long, buy back a short
+      $("#f-submit").disabled = true;
+      worker.postMessage({ type: "order", order: { side: P.side === "long" ? "sell" : "buy", kind: "market", qty: P.size } });
+      return;
+    }
+    // increase / decrease: set up the order form, the amount is yours to choose
+    setSide(what); setKind("market");
+    if (S.unit !== "RCC") { S.unit = "RCC"; refreshForm(); }
+    $("#f-qty").value = ""; $("#f-pct").value = 0; updateTotal();
+    $("#f-qty").focus();
+  });
 
   function renderHistory() {
     const list = [...S.orders.values()].filter((o) => !["open", "partial"].includes(o.status)).sort((a, b) => b.id - a.id).slice(0, 500);
@@ -383,9 +441,12 @@
     if (!series) return;
     const ids = new Set(open.map((o) => o.id));
     for (const [id, pl] of S.priceLines) if (!ids.has(id)) { series.removePriceLine(pl); S.priceLines.delete(id); }
+    // a dotted line per open order, nothing on the price axis: several orders a
+    // few cents apart must not stack label boxes over the chart (details live in
+    // the Open orders tab)
     for (const o of open) if (!S.priceLines.has(o.id)) {
       S.priceLines.set(o.id, series.createPriceLine({ price: o.price, color: o.side === "buy" ? "#27ad75" : "#f0616d",
-        lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `${o.side} ${F4.format(o.remaining)}` }));
+        lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false, title: "" }));
     }
   }
 
@@ -427,7 +488,17 @@
     $$("button[data-tab]", bar).forEach((x) => x.classList.toggle("on", x === b));
     const panel = bar.parentElement;
     $$(".tabpane", panel).forEach((p) => p.classList.toggle("on", p.dataset.pane === b.dataset.tab));
-    if (bar.dataset.group === "chart") { S.chartTab = b.dataset.tab; $("#chart-note").classList.toggle("hidden", S.chartTab !== "price"); pushView(); }
+    if (bar.dataset.group === "chart") {
+      S.chartTab = b.dataset.tab;
+      $("#chart-note").classList.toggle("hidden", S.chartTab !== "price");
+      // leaving the price chart resets its zoom, scroll and price axis, so
+      // coming back always shows the live end of the curve
+      if (S.chartTab !== "price" && chart) {
+        chart.timeScale().resetTimeScale();
+        chart.priceScale("right").applyOptions({ autoScale: true });
+      }
+      pushView();
+    }
   }));
   $("#book-group").onchange = (e) => { S.group = +e.target.value; pushView(); };
   function pushView() { worker.postMessage({ type: "view", group: S.group, depth: S.chartTab === "depth" }); }
@@ -446,7 +517,7 @@
     $("#speed-val").textContent = S.tps;
     worker.postMessage({ type: "speed", tps: S.tps });
   });
-  $("#speed").value = 50; S.tps = speedFromDial(50); $("#speed-val").textContent = S.tps;
+  $("#speed").value = 29; S.tps = 6; $("#speed-val").textContent = S.tps;     // start at 6 ticks/s
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" && !$("#screen-trade").classList.contains("hidden") && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) {
       e.preventDefault(); $("#btn-play").click();
