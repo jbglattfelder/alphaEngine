@@ -85,7 +85,7 @@ jobs:
           # mixes files cached from an older deploy with this one
           sed -i "s/__BUILD__/${GITHUB_SHA::12}/g" _site/venue/index.html
           grep -q "v=${GITHUB_SHA::12}" _site/venue/index.html
-          ! grep -rq "__BUILD__" _site
+          if grep -rq "__BUILD__" _site; then echo "unstamped file URL left in _site"; exit 1; fi
           printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=venue/"><title>RPM Exchange</title><a href="venue/">RPM Exchange</a>\n' > _site/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
