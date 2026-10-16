@@ -257,3 +257,71 @@ def test_position_entry_price_and_side():
     L.fill(+2, 125.0, tick=9)                       # close
     v = L.view(125.0)
     assert (v["side"], v["entry_price"], v["opened_tick"]) == (None, None, None)
+
+
+def _lots(v):
+    return {p["id"]: p for p in v.positions()}
+
+
+def test_every_order_opens_its_own_position():
+    v = Venue(n=80, seed=9, arm="NNNN", user_eur=200_000, user_rcc=1_000)
+    v.step(300)
+    v.place("buy", "market", qty=2)
+    v.place("buy", "market", qty=3)
+    v.place("sell", "market", qty=1)                  # not netted: a short of its own
+    P = v.positions()
+    assert [(p["side"], round(p["size"], 9)) for p in P] == [("long", 2), ("long", 3), ("short", 1)]
+    assert all(p["entry_price"] > 0 and p["order"] for p in P)
+
+
+def test_partial_fills_grow_one_position():
+    v = Venue(n=80, seed=9, arm="NNNN", user_eur=200_000, user_rcc=0)
+    v.step(200)
+    r = v.place("buy", "limit", qty=20, price=v.sim.p * 0.999)
+    oid = r["order"]["id"]
+    for _ in range(60):
+        v.step(10)
+        if v.sim.user_orders[oid].status == "filled":
+            break
+    uo = v.sim.user_orders[oid]
+    mine = [p for p in v.positions() if p["order"] == oid]
+    assert uo.filled > 0 and len(mine) == 1             # many fills, one position
+    assert abs(mine[0]["size"] - uo.filled) < 1e-9
+    assert abs(mine[0]["avg_price"] - uo.notional / uo.filled) < 1e-9
+
+
+def test_position_actions_touch_only_their_position():
+    v = Venue(n=80, seed=9, arm="NNNN", user_eur=200_000, user_rcc=1_000)
+    v.step(300)
+    v.place("buy", "market", qty=2)
+    v.place("buy", "market", qty=4)
+    a, b = sorted(_lots(v))
+    v.place("buy", "market", qty=1, pos_id=a)           # Increase a
+    assert abs(_lots(v)[a]["size"] - 3) < 1e-9 and len(v.positions()) == 2
+    v.place("sell", "market", qty=1.5, pos_id=b)        # Decrease b
+    L = _lots(v)
+    assert abs(L[b]["size"] - 2.5) < 1e-9 and abs(L[a]["size"] - 3) < 1e-9
+    assert L[b]["realised"] != 0.0
+    v.place("sell", "market", qty=3, pos_id=a)          # Close a
+    assert set(_lots(v)) == {b}
+    v.place("sell", "market", qty=4, pos_id=b)          # Decrease b past zero: short 1.5
+    P = v.positions()
+    assert len(P) == 1 and P[0]["side"] == "short" and abs(P[0]["size"] - 1.5) < 1e-9 and P[0]["id"] not in (a, b)
+
+
+def test_positions_add_up_to_the_account():
+    """At one price, the positions' realised + unrealised = the account's Eq. 9b."""
+    v = Venue(n=80, seed=3, arm="PFCF", user_eur=200_000, user_rcc=1_000)
+    v.step(200)
+    rng = np.random.default_rng(1)
+    for k in range(30):
+        side = "buy" if rng.random() < 0.5 else "sell"
+        pos = list(v.sim.lots) or [None]
+        v.place(side, "market", qty=float(rng.uniform(0.2, 3)),
+                pos_id=(pos[0] if rng.random() < 0.3 else None))
+        v.step(20)
+    x = v.sim.p
+    lots = v.sim.lots_banked + sum(l.realised + x * l.b + l.q for l in v.sim.lots.values())
+    assert abs(lots - v.sim.pnl.total_q(x)) < 1e-6
+    total_lots_b = sum(l.b for l in v.sim.lots.values())
+    assert abs(total_lots_b - v.sim.pnl.b_tot) < 1e-9          # positions hold exactly the net RCC

@@ -36,7 +36,7 @@ where you hold coins but never trade is bit-for-bit the engine's own run.
 | setting | meaning |
 |---|---|
 | arm | **NNNN**: capital, bands, timer and order size all drawn per agent from normal distributions; tp/sl are the means, cv 0.3. **PFCF**: Pareto capital, fixed bands (every agent uses exactly tp/sl), clock timer, fixed size |
-| n | agents per side (population 2n), at most 10,000. Speed in Chromium falls roughly as 1/n: about 450 ticks/s at 150, 70 at 1,000, 11 at 7,500, 7 at 10,000 |
+| n | agents per side (population 2n), at most 100,000. Speed in Chromium falls roughly as 1/n: about 450 ticks/s at 150, 70 at 1,000, 7 at 10,000, 2 at 30,000, 1.2 at 50,000, 0.55 at 100,000 (memory about 160 MB; building takes about 25 s). The form shows an estimate under the field |
 | K | the crowd's total capital, EUR |
 | tp, sl | take-profit / stop-loss band, log distance from entry |
 | c | clock rate (pressure per tick), default 0.004 |
@@ -72,13 +72,22 @@ of the curve.
 - **Limit**: whatever crosses fills at once, at maker prices. The rest rests
   at your limit until it is filled or you cancel it (GTC).
 - **Cancel**: one order, or all of them.
-- **Positions** tab: one pair, so at most one position. **Long** means net RCC
-  bought, **short** means net RCC sold (EUR bought). It shows size (RCC, and
-  EUR at x′), the entry price (the fill that opened it), the average price x̄
-  (Eq. 2), the mark x′, unrealised PnL and the opening tick. **Close** sends
-  a market order for the whole position. **Increase** / **Decrease** set up
-  the order form (side, market, cursor in the amount) and leave the amount to
-  you. A fill through zero closes the position and opens the opposite one.
+- **Positions** tab: every market order, and every limit order that fills,
+  opens its **own** position (ticket style: you can be long and short at the
+  same time). A limit order that fills in pieces grows one position (entry =
+  first fill, average = all of them). If its position was closed in between,
+  later fills open a new one. Each row shows side, size (RCC, and EUR at its
+  mark), entry price, average price x̄ (Eq. 2), mark x′ (bid for a long, ask
+  for a short), unrealised and realised PnL, and the opening tick.
+  - **Close** sends a market order for that position's size, booked into it.
+  - **Increase** / **Decrease** link the order form to that position ("Adding
+    to / Reducing position #N"; ✕ unlinks). The next order's fills go into
+    it. Going past zero closes the position and opens the opposite one with
+    the remainder.
+  - The account-level PnL (Assets & PnL) is the paper's netted ledger and is
+    unchanged. At one price, the positions' realised + unrealised add up to
+    it exactly (tested). With hedged positions marked bid/ask, they differ by
+    the spread on the overlap, which is what closing both would cost.
 - **A far-away limit order can fill at once.** Agents enter at the opposite
   touch, so when one side of the book is empty, your order *is* the touch and
   the next entering agent takes it. A sell at 3× the price can fill on the

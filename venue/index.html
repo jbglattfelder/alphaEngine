@@ -39,7 +39,7 @@
       <button data-v="PFCF">PFCF<small>Pareto capital, fixed bands, clock timer, fixed size</small></button>
     </div>
     <div class="grid2">
-      <label><span>Agents per side <i>n</i></span><input id="cfg-n" type="number" min="1" max="10000" step="1" value="150"><small>population = 2n</small></label>
+      <label><span>Agents per side <i>n</i></span><input id="cfg-n" type="number" min="1" max="100000" step="1" value="150"><small id="cfg-n-hint">population = 2n</small></label>
       <label><span>Crowd capital <i>K</i> (EUR)</span><input id="cfg-K" type="number" min="1000" step="1000" value="1000000"></label>
       <label><span>Take profit <i>tp</i> (%)</span><input id="cfg-tp" type="number" min="0.01" max="50" step="0.05" value="1"><small id="cfg-band-note">mean of per-agent draws, cv 0.3</small></label>
       <label><span>Stop loss <i>sl</i> (%)</span><input id="cfg-sl" type="number" min="0.01" max="50" step="0.05" value="1"><small>log distance from entry</small></label>
@@ -159,6 +159,7 @@
           <div class="pct-ticks"><a data-p="0">0%</a><a data-p="25">25%</a><a data-p="50">50%</a><a data-p="75">75%</a><a data-p="100">Max</a></div>
         </div>
         <div class="total"><span id="f-total-lbl">Total</span><b id="f-total">—</b></div>
+        <div id="f-link" class="link hidden"><span id="f-link-txt"></span><button id="f-link-x" title="Unlink: the order opens its own position">✕</button></div>
         <button id="f-submit" class="btn buy wide">Buy RCC</button>
         <p class="muted small">Spot only · no fees · market orders fill what the book holds and drop the rest · limit orders rest until filled or cancelled.</p>
       </div>
@@ -193,8 +194,8 @@
         <p class="empty" id="e-hist">No orders yet</p>
       </div>
       <div class="tabpane scroll" data-pane="pos">
-        <table><thead><tr><th>Market</th><th>Side</th><th class="num">Size (RCC)</th><th class="num">Value (EUR)</th><th class="num">Entry price</th><th class="num">Avg price x̄</th><th class="num">Mark x′</th><th class="num">Unrealised PnL</th><th class="num">Opened</th><th></th></tr></thead><tbody id="t-pos"></tbody></table>
-        <p class="empty" id="e-pos">No open position</p>
+        <table><thead><tr><th class="num">#</th><th>Side</th><th class="num">Size (RCC)</th><th class="num">Value (EUR)</th><th class="num">Entry price</th><th class="num">Avg price x̄</th><th class="num">Mark x′</th><th class="num">Unrealised PnL</th><th class="num">Realised</th><th class="num">Opened</th><th></th></tr></thead><tbody id="t-pos"></tbody></table>
+        <p class="empty" id="e-pos">No open positions</p>
       </div>
       <div class="tabpane scroll" data-pane="fills">
         <table><thead><tr><th>Time</th><th>Tick</th><th>Side</th><th>Price</th><th>Amount (RCC)</th><th>Total (EUR)</th><th>Role</th><th>Counterparty</th><th>Realised</th></tr></thead><tbody id="t-fills"></tbody></table>

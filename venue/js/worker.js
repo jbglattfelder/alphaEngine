@@ -55,7 +55,7 @@ def _view(group, depth):
 def _order(o):
     o = json.loads(o)
     r = V.place(o["side"], o["kind"], qty=o.get("qty"), price=o.get("price"),
-                eur_amount=o.get("eur_amount"))
+                eur_amount=o.get("eur_amount"), pos_id=o.get("pos_id"))
     return json.dumps(r)
 
 def _cancel(i):

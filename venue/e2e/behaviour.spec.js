@@ -38,10 +38,10 @@ test("configure validates and clears errors", async ({ page }) => {
   await expect(page.locator("#cfg-err")).toHaveText("your allocation exceeds 75% of K");
   await page.fill("#cfg-eur", "50000");
   await expect(page.locator("#cfg-err")).toHaveText("");
-  for (const n of [0, 10001]) {
+  for (const n of [0, 100001]) {
     await configure(page, { n });
     await page.click("#btn-launch");
-    await expect(page.locator("#cfg-err")).toHaveText("n must be between 1 and 10,000 agents per side");
+    await expect(page.locator("#cfg-err")).toHaveText("n must be between 1 and 100,000 agents per side");
     await expect(page.locator("#screen-config")).toBeVisible();
   }
 });
@@ -339,49 +339,89 @@ test("Cancel and book-price clicks work while the market plays", async ({ page }
   await page.click("#btn-play");
 });
 
-test("Positions: long after a buy, short after selling more; Close flattens", async ({ page }) => {
+test("Positions: every market order opens its own; Close closes only that one", async ({ page }) => {
   await openMarket(page);
   await step(page, 300);
   await expect(page.locator("#cnt-pos")).toHaveText("0");
   await page.click(".tabs[data-group=bottom] button[data-tab=pos]");
   await expect(page.locator("#e-pos")).toBeVisible();
   await order(page, { side: "buy", kind: "market", qty: 4 });
-  let P = await page.evaluate(() => window.__rpm.position());
-  expect(P.side).toBe("long");
-  expect(P.size).toBeCloseTo(4, 9);
-  await expect(page.locator("#cnt-pos")).toHaveText("1");
-  await expect(page.locator("#t-pos tr td").nth(1)).toHaveText("LONG");
-  await expect(page.locator('#t-pos [data-f="size"]')).toHaveText("4.0000");
-  await expect(page.locator('#t-pos [data-f="opened"]')).toHaveText("t 300");
   await step(page, 50);
-  await order(page, { side: "sell", kind: "market", qty: 10 });           // through zero: short 6
-  P = await page.evaluate(() => window.__rpm.position());
-  expect(P.side).toBe("short");
-  expect(P.size).toBeCloseTo(6, 9);
-  expect(P.opened_tick).toBe(350);
-  await expect(page.locator("#t-pos tr td").nth(1)).toHaveText("SHORT");
-  await page.click('#t-pos [data-pos="close"]');
+  await order(page, { side: "sell", kind: "market", qty: 10 });      // not netted: a short of its own
+  let P = await page.evaluate(() => window.__rpm.positions());
+  expect(P.map((p) => [p.side, p.size, p.opened_tick])).toEqual([["long", 4, 300], ["short", 10, 350]]);
+  await expect(page.locator("#cnt-pos")).toHaveText("2");
+  await expect(page.locator("#t-pos tr")).toHaveCount(2);
+  await expect(page.locator(`#t-pos tr[data-id="${P[1].id}"] td`).nth(1)).toHaveText("SHORT");
+  await page.click(`#t-pos tr[data-id="${P[1].id}"] [data-pos="close"]`);
   await sync(page);
-  await expect(page.locator(".toast.ok").last()).toContainText("Buy market filled: 6.0000 RCC");
-  await expect(page.locator("#cnt-pos")).toHaveText("0");
-  await expect(page.locator("#e-pos")).toBeVisible();
-  expect(await page.evaluate(() => window.__rpm.position())).toBeNull();
+  await expect(page.locator(".toast.ok").last()).toContainText("Buy market filled: 10.0000 RCC");
+  P = await page.evaluate(() => window.__rpm.positions());
+  expect(P.map((p) => [p.side, p.size])).toEqual([["long", 4]]);         // the long is untouched
+  await expect(page.locator("#cnt-pos")).toHaveText("1");
 });
 
-test("Positions: Increase / Decrease set up the order form", async ({ page }) => {
+test("Positions: a limit order filling in pieces grows one position", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 200);
+  const bid = await quick(page, "bid");
+  await order(page, { side: "buy", kind: "limit", qty: 15, price: (bid * 0.999).toFixed(2) });
+  for (let i = 0; i < 30 && (await page.textContent("#cnt-open")) !== "0"; i++) await step(page, 20);
+  const P = await page.evaluate(() => window.__rpm.positions());
+  await page.click(".tabs[data-group=bottom] button[data-tab=fills]");
+  expect(await page.locator("#t-fills tr").count()).toBeGreaterThan(1);    // several fills…
+  expect(P.length).toBe(1);                                                 // …one position
+  expect(P[0].side).toBe("long");
+});
+
+test("Positions: Increase / Decrease link the order form to that position", async ({ page }) => {
   await openMarket(page);
   await step(page, 300);
   await order(page, { side: "buy", kind: "market", qty: 3 });
+  await order(page, { side: "buy", kind: "market", qty: 5 });
   await page.click(".tabs[data-group=bottom] button[data-tab=pos]");
-  for (const [act, side] of [["sell", "sell"], ["buy", "buy"]]) {        // long: Decrease = sell, Increase = buy
-    await page.click(`#t-pos [data-pos="${act}"]`);
-    await expect(page.locator(`#side-${side}`)).toHaveClass(/on/);
-    await expect(page.locator('.kinds button[data-kind="market"]')).toHaveClass(/on/);
-    await expect(page.locator("#f-qty")).toBeFocused();
-    await expect(page.locator("#f-qty")).toHaveValue("");
-  }
-  await expect(page.locator('#t-pos [data-pos="buy"]')).toHaveText("Increase");
-  await expect(page.locator('#t-pos [data-pos="sell"]')).toHaveText("Decrease");
+  let P = await page.evaluate(() => window.__rpm.positions());
+  const [a, b] = P.map((p) => p.id);
+  // Increase #a: the form is set up and says so
+  await page.click(`#t-pos tr[data-id="${a}"] [data-pos="buy"]`);
+  await expect(page.locator("#side-buy")).toHaveClass(/on/);
+  await expect(page.locator('.kinds button[data-kind="market"]')).toHaveClass(/on/);
+  await expect(page.locator("#f-qty")).toBeFocused();
+  await expect(page.locator("#f-link")).toBeVisible();
+  await expect(page.locator("#f-link-txt")).toHaveText(`Adding to position #${a}`);
+  await page.fill("#f-qty", "2");
+  await page.click("#f-submit");
+  await sync(page);
+  await expect(page.locator("#f-link")).toBeHidden();                       // one order per link
+  P = await page.evaluate(() => window.__rpm.positions());
+  expect(P.map((p) => [p.id, p.size])).toEqual([[a, 5], [b, 5]]);           // into #a, no new position
+  // Decrease #b past its size: closes it, the rest opens a short
+  await page.click(`#t-pos tr[data-id="${b}"] [data-pos="sell"]`);
+  await expect(page.locator("#f-link-txt")).toHaveText(`Reducing position #${b}`);
+  await page.fill("#f-qty", "7");
+  await page.click("#f-submit");
+  await sync(page);
+  P = await page.evaluate(() => window.__rpm.positions());
+  expect(P.map((p) => [p.side, p.size])).toEqual([["long", 5], ["short", 2]]);
+  expect(P[1].id).not.toBe(b);
+  // ✕ unlinks: the next order opens its own position
+  await page.click(`#t-pos tr[data-id="${a}"] [data-pos="sell"]`);
+  await page.click("#f-link-x");
+  await expect(page.locator("#f-link")).toBeHidden();
+  await page.fill("#f-qty", "1");
+  await page.click("#f-submit");
+  await sync(page);
+  expect((await page.evaluate(() => window.__rpm.positions())).length).toBe(3);
+});
+
+test("n up to 100,000 per side, with a speed hint", async ({ page }) => {
+  await signIn(page);
+  await expect(page.locator("#cfg-n-hint")).toHaveText("population 300 · ≈ 433 ticks/s");
+  await page.fill("#cfg-n", "100000");
+  await expect(page.locator("#cfg-n-hint")).toHaveText("population 200,000 · ≈ 0.7 ticks/s · opens in ≈ 25 s");
+  await page.click("#btn-launch");
+  await expect(page.locator("#cfg-err")).toHaveText("");
+  await expect(page.locator("#screen-loading")).toBeVisible();
 });
 
 test("the Positions row keeps its buttons while numbers tick", async ({ page }) => {
