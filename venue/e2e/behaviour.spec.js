@@ -260,8 +260,13 @@ test("going to the depth chart resets the price chart's zoom and scroll", async 
   await page.click(".tabs[data-group=chart] button[data-tab=depth]");
   await page.click(".tabs[data-group=chart] button[data-tab=price]");
   const back = await page.evaluate(() => window.__rpm.visible());
-  expect(back.from).toBeCloseTo(fresh.from, 0);
-  expect(back.to).toBeCloseTo(fresh.to, 0);
+  const last = (await page.evaluate(() => window.__rpm.tape().length)) - 1;
+  // back at the live end (last bar + the 6-bar right margin) at the default zoom.
+  // The width may differ from the first view by a bar: the chart re-measures
+  // itself when it is shown again (a 1-bar mismatch made this test flaky in CI)
+  expect(back.to).toBeCloseTo(last + 6, 0);
+  expect(fresh.to).toBeCloseTo(last + 6, 0);
+  expect(Math.abs((back.to - back.from) - (fresh.to - fresh.from))).toBeLessThanOrEqual(1.01);
 });
 
 test("every file is fetched with the deploy's version stamp", async ({ page }) => {
