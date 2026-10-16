@@ -133,7 +133,10 @@
       tape: () => series.data().map((d) => [d.time, d.value]),        // the chart's tick tape
       volumes: () => volume.data().map((d) => d.value),
       markers: () => S.markers.length,
-      visible: () => chart.timeScale().getVisibleLogicalRange(),
+      // after two frames: the chart applies data and scroll changes on the next
+      // animation frame, so reading at once can be a bar behind (CI flake)
+      visible: () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() =>
+        r(chart.timeScale().getVisibleLogicalRange())))),
       position: () => S.position && S.position.side ? S.position : null,
       orderLines: () => [...S.priceLines.values()].map((pl) => pl.options()),
     };
