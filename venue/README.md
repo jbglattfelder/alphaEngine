@@ -72,6 +72,17 @@ of the curve.
 - **Limit**: whatever crosses fills at once, at maker prices. The rest rests
   at your limit until it is filled or you cancel it (GTC).
 - **Cancel**: one order, or all of them.
+- **Positions** tab: one pair, so at most one position. **Long** means net RCC
+  bought, **short** means net RCC sold (EUR bought). It shows size (RCC, and
+  EUR at x′), the entry price (the fill that opened it), the average price x̄
+  (Eq. 2), the mark x′, unrealised PnL and the opening tick. **Close** sends
+  a market order for the whole position. **Increase** / **Decrease** set up
+  the order form (side, market, cursor in the amount) and leave the amount to
+  you. A fill through zero closes the position and opens the opposite one.
+- **A far-away limit order can fill at once.** Agents enter at the opposite
+  touch, so when one side of the book is empty, your order *is* the touch and
+  the next entering agent takes it. A sell at 3× the price can fill on the
+  next tick in a thin market. That is the null model, not the venue.
 - Partial fills are allowed. There are no fees. Trading is spot only: resting
   orders lock their coins, and an order you cannot pay for is rejected.
 - **Self-trade prevention** is the engine's own rule (cancel-resting): an order

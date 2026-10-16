@@ -90,7 +90,7 @@ test.describe("the venue, reference session", () => {
   test("panels: bottom tabs", async ({ page }) => {
     await referenceSession(page);
     const bottom = page.locator(".p-bottom");
-    for (const tab of ["open", "hist", "fills", "assets"]) {
+    for (const tab of ["open", "hist", "pos", "fills", "assets"]) {
       await page.click(`.tabs[data-group=bottom] button[data-tab=${tab}]`);
       await snap(page, bottom, `panel-bottom-${tab}.png`, shot());
     }

@@ -178,6 +178,7 @@
       <div class="tabs" data-group="bottom">
         <button class="on" data-tab="open">Open orders <span class="cnt" id="cnt-open">0</span></button>
         <button data-tab="hist">Order history</button>
+        <button data-tab="pos">Positions <span class="cnt" id="cnt-pos">0</span></button>
         <button data-tab="fills">Trade history</button>
         <button data-tab="assets">Assets &amp; PnL</button>
         <div class="spacer"></div>
@@ -190,6 +191,10 @@
       <div class="tabpane scroll" data-pane="hist">
         <table><thead><tr><th>Time</th><th>Tick</th><th>Side</th><th>Type</th><th>Price</th><th>Amount</th><th>Filled</th><th>Avg price</th><th>Status</th><th>Note</th></tr></thead><tbody id="t-hist"></tbody></table>
         <p class="empty" id="e-hist">No orders yet</p>
+      </div>
+      <div class="tabpane scroll" data-pane="pos">
+        <table><thead><tr><th>Market</th><th>Side</th><th class="num">Size (RCC)</th><th class="num">Value (EUR)</th><th class="num">Entry price</th><th class="num">Avg price x̄</th><th class="num">Mark x′</th><th class="num">Unrealised PnL</th><th class="num">Opened</th><th></th></tr></thead><tbody id="t-pos"></tbody></table>
+        <p class="empty" id="e-pos">No open position</p>
       </div>
       <div class="tabpane scroll" data-pane="fills">
         <table><thead><tr><th>Time</th><th>Tick</th><th>Side</th><th>Price</th><th>Amount (RCC)</th><th>Total (EUR)</th><th>Role</th><th>Counterparty</th><th>Realised</th></tr></thead><tbody id="t-fills"></tbody></table>

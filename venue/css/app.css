@@ -177,6 +177,7 @@ td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowra
 td.num, th.num { text-align: right; font-family: var(--mono); }
 td .x { color: var(--muted); background: transparent; border: 1px solid var(--line-2); border-radius: 5px; cursor: pointer; padding: 2px 8px; }
 td .x:hover { color: var(--dn); border-color: var(--dn); }
+td.acts { display: flex; gap: 6px; }
 .empty { color: var(--muted); text-align: center; padding: 24px; margin: 0; }
 .st { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--line); }
 .st.filled { background: var(--up-bg); color: var(--up); }

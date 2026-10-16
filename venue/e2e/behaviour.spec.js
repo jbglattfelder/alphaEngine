@@ -1,6 +1,15 @@
 // Behaviour regression: what the venue does, independent of how it looks.
 const { test, expect, signIn, configure, launch, openMarket, step, sync, quick, order } = require("./fixtures");
 
+// a human click: press, ~90 ms, release, at the element's position read in one
+// step (Playwright's own click waits for an element that holds still, which a
+// redrawn-every-tick table never does; people do not wait)
+async function humanClick(page, sel) {
+  const b = await page.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, sel);
+  await page.mouse.move(b.x, b.y);
+  await page.mouse.down(); await page.waitForTimeout(90); await page.mouse.up();
+}
+
 const num = async (page, sel) => parseFloat((await page.textContent(sel)).replace(/[^0-9.\-]/g, ""));
 const tick = (page) => num(page, "#hdr-tick");
 
@@ -301,4 +310,80 @@ test("amount slider labels: 0 % to Max, each sets its own value", async ({ page 
     const want = slider.x + 8 + (slider.width - 16) * p / 100;
     expect(Math.abs(b.x + b.width / 2 - want)).toBeLessThan(1.5);
   }
+});
+
+test("Cancel and book-price clicks work while the market plays", async ({ page }) => {
+  await signIn(page, undefined, undefined, "?e2e&autoplay");
+  await configure(page, { n: 1000 });                                // a book deep enough to rest in
+  await launch(page);
+  await page.locator("#speed").fill("50");                           // 22 ticks/s: a redraw every ~45 ms
+  for (let i = 0; i < 20 && (await page.textContent("#cnt-open")) === "0"; i++) {
+    const bid = await quick(page, "bid");
+    await order(page, { side: "buy", kind: "limit", qty: 0.5, price: (bid * 0.9).toFixed(2) });
+  }
+  const before = +(await page.textContent("#cnt-open"));
+  expect(before).toBeGreaterThan(0);
+  await humanClick(page, "#t-open [data-cancel]");                   // one click, not retries
+  await expect(page.locator("#cnt-open")).toHaveText(String(before - 1), { timeout: 2000 });
+  await page.click('.kinds button[data-kind="limit"]');
+  await page.fill("#f-price", "");
+  await page.click('.kinds button[data-kind="market"]');           // a book press switches back to limit
+  await humanClick(page, "#asks .bk-row:last-of-type, #bids .bk-row");   // best ask (else best bid): next to the mid, always in view
+  await expect(page.locator('.kinds button[data-kind="limit"]')).toHaveClass(/on/);
+  expect(parseFloat(await page.inputValue("#f-price"))).toBeGreaterThan(0);
+  await page.click("#btn-play");
+});
+
+test("Positions: long after a buy, short after selling more; Close flattens", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 300);
+  await expect(page.locator("#cnt-pos")).toHaveText("0");
+  await page.click(".tabs[data-group=bottom] button[data-tab=pos]");
+  await expect(page.locator("#e-pos")).toBeVisible();
+  await order(page, { side: "buy", kind: "market", qty: 4 });
+  let P = await page.evaluate(() => window.__rpm.position());
+  expect(P.side).toBe("long");
+  expect(P.size).toBeCloseTo(4, 9);
+  await expect(page.locator("#cnt-pos")).toHaveText("1");
+  await expect(page.locator("#t-pos tr td").nth(1)).toHaveText("LONG");
+  await expect(page.locator('#t-pos [data-f="size"]')).toHaveText("4.0000");
+  await expect(page.locator('#t-pos [data-f="opened"]')).toHaveText("t 300");
+  await step(page, 50);
+  await order(page, { side: "sell", kind: "market", qty: 10 });           // through zero: short 6
+  P = await page.evaluate(() => window.__rpm.position());
+  expect(P.side).toBe("short");
+  expect(P.size).toBeCloseTo(6, 9);
+  expect(P.opened_tick).toBe(350);
+  await expect(page.locator("#t-pos tr td").nth(1)).toHaveText("SHORT");
+  await page.click('#t-pos [data-pos="close"]');
+  await sync(page);
+  await expect(page.locator(".toast.ok").last()).toContainText("Buy market filled: 6.0000 RCC");
+  await expect(page.locator("#cnt-pos")).toHaveText("0");
+  await expect(page.locator("#e-pos")).toBeVisible();
+  expect(await page.evaluate(() => window.__rpm.position())).toBeNull();
+});
+
+test("Positions: Increase / Decrease set up the order form", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 300);
+  await order(page, { side: "buy", kind: "market", qty: 3 });
+  await page.click(".tabs[data-group=bottom] button[data-tab=pos]");
+  for (const [act, side] of [["sell", "sell"], ["buy", "buy"]]) {        // long: Decrease = sell, Increase = buy
+    await page.click(`#t-pos [data-pos="${act}"]`);
+    await expect(page.locator(`#side-${side}`)).toHaveClass(/on/);
+    await expect(page.locator('.kinds button[data-kind="market"]')).toHaveClass(/on/);
+    await expect(page.locator("#f-qty")).toBeFocused();
+    await expect(page.locator("#f-qty")).toHaveValue("");
+  }
+  await expect(page.locator('#t-pos [data-pos="buy"]')).toHaveText("Increase");
+  await expect(page.locator('#t-pos [data-pos="sell"]')).toHaveText("Decrease");
+});
+
+test("the Positions row keeps its buttons while numbers tick", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 300);
+  await order(page, { side: "buy", kind: "market", qty: 3 });
+  const id = await page.evaluate(() => { const b = document.querySelector('#t-pos [data-pos="close"]'); b.dataset.mark = "x"; return 1; });
+  await step(page, 200);
+  expect(await page.evaluate(() => document.querySelector('#t-pos [data-pos="close"]').dataset.mark)).toBe("x");
 });

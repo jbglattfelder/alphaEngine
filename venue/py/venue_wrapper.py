@@ -107,10 +107,24 @@ class PaperPnL:
     volume_rcc: float = 0.0
     n_fills: int = 0
     dust: float = 1e-12
+    entry_price: Optional[float] = None   # price of the fill that opened the position
+    opened_tick: Optional[int] = None
+    _flipped: bool = False                # set by _fill when a fill crossed zero
 
-    def fill(self, u: float, x: float) -> float:
+    def fill(self, u: float, x: float, tick: Optional[int] = None) -> float:
         """Book one fill of u RCC (u > 0 bought) at x. Returns the PnL
         realised by this fill (EUR)."""
+        was_flat = self.b == 0.0
+        banked = self._fill(u, x)
+        if self.b == 0.0:
+            self.entry_price = self.opened_tick = None
+        elif was_flat or self._flipped:
+            # opened from flat, or flipped through zero: a new position
+            self.entry_price, self.opened_tick = x, tick
+        return banked
+
+    def _fill(self, u: float, x: float) -> float:
+        self._flipped = False
         self.b_tot += u
         self.q_tot -= x * u
         self.volume_rcc += abs(u)
@@ -127,6 +141,7 @@ class PaperPnL:
             if abs(u_rest) > self.dust:
                 self.b = u_rest
                 self.q = -x * u_rest
+                self._flipped = True
         else:
             self.b += u
             self.q -= x * u
@@ -173,7 +188,10 @@ class PaperPnL:
         xp = self.x_prime(last, bid, ask)
         pb = self.total_b(xp)
         w0b = self.B + self.Q / X0
-        return dict(realised=self.realised, unrealised=self.unrealised(xp),
+        side = "long" if self.b > 0 else "short" if self.b < 0 else None
+        return dict(side=side, size=abs(self.b), value=abs(self.b) * xp,
+                    entry_price=self.entry_price, opened_tick=self.opened_tick,
+                    realised=self.realised, unrealised=self.unrealised(xp),
                     total=self.total_q(xp), total_rcc=pb, wealth=self.wealth_q(xp),
                     wealth_rcc=self.wealth_q(xp) / xp, x_prime=xp,
                     avg_price=self.avg_price(), position=self.b,
@@ -308,7 +326,7 @@ class VenueSim(Simulation):
     # ── fill bookkeeping ────────────────────────────────────────────────────
     def _record_user_fill(self, uo: Optional[UserOrder], tr: Trade, role: str) -> None:
         u = tr.size if tr.buy_agent == USER_ID else -tr.size
-        realised = self.pnl.fill(u, tr.price)
+        realised = self.pnl.fill(u, tr.price, tick=self.t)
         if uo is not None:
             uo.filled += tr.size
             uo.notional += tr.size * tr.price
