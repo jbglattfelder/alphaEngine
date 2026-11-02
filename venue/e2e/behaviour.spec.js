@@ -63,7 +63,7 @@ test("market opens at x0 = 100, tick 0, with the allocation", async ({ page }) =
   await expect(page.locator("#hdr-last")).toHaveText("100.00");
   await expect(page.locator("#a-eur")).toHaveText("50,000.00");
   await expect(page.locator("#a-rcc")).toHaveText("500.0000");
-  await expect(page.locator("#hdr-alive")).toHaveText("300 / 300");
+  await expect(page.locator("#hdr-neff")).toHaveText(/^\d{2,3} \/ 300$/);    // n_eff <= 2n
 });
 
 test("play, pause, space bar and the speed dial", async ({ page }) => {
@@ -199,7 +199,7 @@ test("no horizontal scroll at phone width", async ({ page }) => {
 
 test("n = 10,000 per side opens", async ({ page }) => {
   await openMarket(page, { n: 10000 });
-  await expect(page.locator("#hdr-alive")).toHaveText("20000 / 20000");
+  await expect(page.locator("#hdr-neff")).toHaveText(/^[\d,]+ \/ 20,000$/);
   await step(page, 3);
   expect(await tick(page)).toBe(3);
 });
@@ -431,4 +431,29 @@ test("the Positions row keeps its buttons while numbers tick", async ({ page }) 
   const id = await page.evaluate(() => { const b = document.querySelector('#t-pos [data-pos="close"]'); b.dataset.mark = "x"; return 1; });
   await step(page, 200);
   expect(await page.evaluate(() => document.querySelector('#t-pos [data-pos="close"]').dataset.mark)).toBe("x");
+});
+
+test("amount slider sizes a fresh limit buy (price taken from the touch)", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 300);
+  await expect(page.locator("#f-price")).toHaveValue("");                   // fresh form: limit, buy, no price
+  await page.locator("#f-pct").fill("50");
+  const p = parseFloat(await page.inputValue("#f-price"));
+  const q = parseFloat(await page.inputValue("#f-qty"));
+  expect(p).toBeGreaterThan(0);
+  expect(q).toBeGreaterThan(0);
+  expect(Math.abs(q * p - 25000)).toBeLessThan(p * 1e-4 + 0.01);             // half of 50,000 EUR
+});
+
+test("positions and the account are marked to market at the last price", async ({ page }) => {
+  await openMarket(page, { n: 2 });
+  await step(page, 605);
+  await order(page, { side: "buy", kind: "market", qty: 5 });
+  await step(page, 305);
+  const [P] = await page.evaluate(() => window.__rpm.positions());
+  const last = parseFloat((await page.textContent("#hdr-last")).replace(/,/g, ""));
+  expect(P.x_prime).toBeCloseTo(last, 2);
+  expect(P.unrealised).toBeCloseTo(5 * (P.x_prime - P.avg_price), 9);
+  expect(P.unrealised).toBeCloseTo(-4.6259, 4);                               // the reported case
+  await expect(page.locator('#t-pos [data-f="mark"]')).toHaveText(last.toFixed(2));
 });

@@ -77,17 +77,14 @@ of the curve.
   same time). A limit order that fills in pieces grows one position (entry =
   first fill, average = all of them). If its position was closed in between,
   later fills open a new one. Each row shows side, size (RCC, and EUR at its
-  mark), entry price, average price x̄ (Eq. 2), mark x′ (bid for a long, ask
-  for a short), unrealised and realised PnL, and the opening tick.
+  mark), entry price, average price x̄ (Eq. 2), mark x (the last price), unrealised and realised PnL, and the opening tick.
   - **Close** sends a market order for that position's size, booked into it.
   - **Increase** / **Decrease** link the order form to that position ("Adding
     to / Reducing position #N"; ✕ unlinks). The next order's fills go into
     it. Going past zero closes the position and opens the opposite one with
     the remainder.
-  - The account-level PnL (Assets & PnL) is the paper's netted ledger and is
-    unchanged. At one price, the positions' realised + unrealised add up to
-    it exactly (tested). With hedged positions marked bid/ask, they differ by
-    the spread on the overlap, which is what closing both would cost.
+  - The account-level PnL (Assets & PnL) is the paper's netted ledger. The
+    positions' realised + unrealised add up to it exactly (tested).
 - **A far-away limit order can fill at once.** Agents enter at the opposite
   touch, so when one side of the book is empty, your order *is* the touch and
   the next entering agent takes it. A sell at 3× the price can fill on the
@@ -101,34 +98,38 @@ of the curve.
 
 ## PnL (Glattfelder & Houweling 2024, arXiv:2411.14068)
 
-The balance-sheet tally the engine uses for its agents, with the spread.
-Fills are booked at the price they traded at (Eq. 1). Positions are marked at
-x′, "the opposite of the bid/ask pair", which is the side of the book the
-position would close against:
-
-- **long (b > 0)**: the best bid
-- **short (b < 0)**: the best ask
-- **flat (b = 0)**: the ask when q > 0, the bid when q < 0. This follows the
-  paper's worked example (260 USDT → 1.527165 SOL at the ask 170.25), which
-  Eq. 10 as printed does not reproduce.
-
-An empty side falls back to the last price.
+The balance-sheet tally the engine uses for its agents. Fills are booked at
+the price they traded at (Eq. 1). Everything is **marked to market at the
+last traded price x**, the engine's own definition of "the price". This is
+the paper's single-price form, x′ = x. The paper's bid/ask variant (x′ = the
+opposite side of the book) is deliberately not used for marking: in a thin
+book it values a position at a quote far from the market and reports the
+spread as PnL. The formulas still take x′ as an argument, so the paper's
+worked example (with its bid/ask columns) is reproduced row by row in the
+tests.
 
 | quantity | equation |
 |---|---|
-| position b = Σuⱼ, q = −Σxⱼuⱼ | Eq. 1 |
-| average price x̄ = −q/b | Eq. 2 |
-| PnL vs not trading pᵠ = x′b + q (EUR), pᵇ = b + q/x′ (RCC) | Eqs. 3, 9 |
-| wealth Wᵠ = x′(B + b) + Q + q, Wᵇ = Wᵠ/x′ | Eq. 8 |
+| tally b = Σuⱼ, q = −Σxⱼuⱼ | Eq. 1 |
+| average price x̄ = −q/b of the **open** position (its tally restarts at every flat and flip, so it never carries realised PnL; the paper's cumulative x̄ would, e.g. 148.3 instead of 165 in its example) | Eq. 2 |
+| pᵇ = b(1 − x̄/x) = b + q/x (RCC), pᵠ = pᵇ·x = x·b + q (EUR) | Eqs. 3, 5a, 9 |
+| wealth Wᵠ = x(B + b) + Q + q, Wᵇ = Wᵠ/x | Eq. 8 |
 | performance p̃ = pᵇ / (B + Q/x₀) | Sec. 3 |
 
 - **Realised PnL** is the banked q of every round trip that returned to b = 0.
   A fill that flips the position through zero is split at zero.
-- **Unrealised PnL** is x′b + q of the open position.
-- Realised + unrealised = pᵠ.
-- A test reproduces every row of the paper's SOL/USDT table (pᵇ, pᵠ, Wᵠ).
-- At a single price (x′ = last) the agents' PnL plus yours sums to zero
-  (tested).
+- **Unrealised PnL** = pᵠ − realised.
+- **Example** (n = 2, NNNN, defaults; tested): buy 5 RCC at 103.182203 at
+  tick 605; at tick 910 the last price is 102.257021. Unrealised PnL is
+  5 × (102.257021 − 103.182203) = −4.6259 EUR, and pᵇ = −0.045238 RCC.
+- **Positions** (one per order) use the same mark. Each has its own average
+  price and its own realised PnL from reductions. Positions, open and closed,
+  add up to the account's pᵠ exactly (tested).
+- Agents' PnL plus yours sums to zero (tested).
+
+The header's **Effective agents nₑff** = 1/Σwᵢ², with wᵢ an agent's share of
+the crowd's wealth in X units (EUR/√p + RCC·√p), as in `neff_driver.py` of
+the development repository. Equal wealth gives 2n; concentration pulls it down.
 
 ## Security
 

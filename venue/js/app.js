@@ -305,7 +305,7 @@
     $("#hdr-chg").className = chg >= 0 ? "up" : "dn";
     $("#hdr-hl").textContent = `${px(mk.hi)} / ${px(mk.lo)}`;
     $("#hdr-vol").textContent = F2.format(mk.volume);
-    $("#hdr-alive").textContent = `${mk.alive} / ${mk.population}`;
+    $("#hdr-neff").textContent = `${F0.format(mk.n_eff)} / ${F0.format(mk.population)}`;
     $("#hdr-tick").textContent = F0.format(mk.t);
     $("#bk-last").textContent = px(mk.price);
     $("#bk-last").className = "";
@@ -453,14 +453,14 @@
     const cell = (label, val, note, c = "") => `<div><small>${label}</small><b class="${c}">${val}</b><em>${note}</em></div>`;
     $("#pnlgrid").innerHTML = [
       cell("Realised PnL", signed(P.realised), "banked q of closed round trips", cls(P.realised)),
-      cell("Unrealised PnL", signed(P.unrealised), "x′·b + q of the open position", cls(P.unrealised)),
-      cell("Total PnL p<sup>q</sup>", signed(P.total), "Eq. 9b: x′·b + q vs not trading", cls(P.total)),
-      cell("Total PnL p<sup>b</sup>", signed(P.total_rcc, " RCC"), "Eq. 3 / 9a: b + q/x′", cls(P.total_rcc)),
-      cell("Mark x′", px(P.x_prime), P.position > 0 ? "best bid (long closes there)" : P.position < 0 ? "best ask (short closes there)" : "flat: ask if q > 0, bid if q < 0"),
+      cell("Unrealised PnL", signed(P.unrealised), "x·b + q of the open position", cls(P.unrealised)),
+      cell("Total PnL p<sup>q</sup>", signed(P.total), "Eq. 9b: x·b + q vs not trading", cls(P.total)),
+      cell("Total PnL p<sup>b</sup>", signed(P.total_rcc, " RCC"), "Eq. 3 / 9a: b(1 − x̄/x) = b + q/x", cls(P.total_rcc)),
+      cell("Mark x", px(P.x_prime), "last price (mark-to-market)"),
       cell("Position b", qty(P.position) + " RCC", "Eq. 1a: net RCC bought"),
-      cell("Average price x̄", px(P.avg_price), "Eq. 2: −q/b"),
-      cell("Wealth W<sup>q</sup>", F2.format(P.wealth) + " EUR", "Eq. 8b: x′(B+b) + Q + q"),
-      cell("Wealth W<sup>b</sup>", qty(P.wealth_rcc) + " RCC", "Eq. 8a: W<sup>q</sup>/x′"),
+      cell("Average price x̄", px(P.avg_price), "Eq. 2: −q/b of the open position"),
+      cell("Wealth W<sup>q</sup>", F2.format(P.wealth) + " EUR", "Eq. 8b: x(B+b) + Q + q"),
+      cell("Wealth W<sup>b</sup>", qty(P.wealth_rcc) + " RCC", "Eq. 8a: W<sup>q</sup>/x"),
       cell("Performance p̃", (P.perf >= 0 ? "+" : "−") + F4.format(Math.abs(P.perf * 100)) + " %", "Sec. 3: p<sup>b</sup> / (B + Q/x₀)", cls(P.perf)),
       cell("Volume", qty(P.volume) + " RCC", `${P.n_fills} fills · no fees`),
     ].join("");
@@ -628,7 +628,15 @@
     let v;
     if (S.side === "sell") v = a.avail_rcc * f;
     else if (S.unit === "EUR") v = a.avail_eur * f;
-    else { const p = refPrice(); v = p > 0 ? a.avail_eur * f / p : 0; }
+    else {
+      // a limit buy is sized as EUR / limit price: with no price entered yet,
+      // take the touch it would trade against (best ask, else the last price)
+      if (S.kind === "limit" && !(parseFloat($("#f-price").value) > 0)) {
+        const b = S.snap.book, t = (S.side === "buy" ? b.best_ask : b.best_bid) ?? S.lastPrice;
+        $("#f-price").value = t.toFixed(2);
+      }
+      const p = refPrice(); v = p > 0 ? a.avail_eur * f / p : 0;
+    }
     // round down so "Max" never asks for more than is there
     const d = S.unit === "EUR" ? 100 : 1e4;
     $("#f-qty").value = (Math.floor(v * d * (1 - 1e-12)) / d).toString();

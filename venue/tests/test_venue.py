@@ -185,13 +185,15 @@ def test_paper_pnl_worked_example():
     for u, x, xo, pb, pq, wq in rows:
         L.fill(u, x)
         bid, ask = (xo, x) if u > 0 else (x, xo)     # buys trade at the ask
-        xp = L.x_prime(last=x, bid=bid, ask=ask)
+        # the paper's x' for this row: the bid after a buy, the ask after a
+        # sell; flat: the ask (the example converts its profit at the ask)
+        xp = bid if L.b > 0 else ask
         assert abs(L.total_b(xp) - pb) < 1e-6, (u, x)   # the table truncates at 6 dp
         assert abs(L.total_q(xp) - pq) < 1e-9, (u, x)
         assert abs(L.wealth_q(xp) - wq) < 1e-6, (u, x)
     assert L.b == 0.0 and abs(L.realised - 260.0) < 1e-9
-    v = L.view(last=170.0, bid=170.0, ask=170.25)
-    assert abs(v["perf"] - 1.527165 / (500 + 75_000 / X0)) < 1e-6   # Sec. 3, the venue x0
+    v = L.view(last=170.0)
+    assert abs(v["perf"] - (260.0 / 170.0) / (500 + 75_000 / X0)) < 1e-9   # Sec. 3 at x = 170
     assert v["unrealised"] == 0.0
 
 
@@ -203,6 +205,8 @@ def test_paper_pnl_split_adds_up():
     assert L.realised == 0.0 and abs(L.unrealised(110.0) - 20.0) < 1e-12
     L.fill(-3, 120.0)                 # closes (+30 banked) and flips short 2 @ 120
     assert abs(L.realised - 30.0) < 1e-12   # 10 (partial) + 20 (close)
+    # the flip closed the long (30 banked) and opened the short AT 120: the
+    # average starts afresh and carries none of the realised PnL
     assert L.b == -2.0 and L.avg_price() == 120.0
     for x in (90.0, 120.0, 150.0):
         assert abs(L.realised + L.unrealised(x) - L.total_q(x)) < 1e-9
@@ -246,13 +250,13 @@ def test_position_entry_price_and_side():
     assert L.view(100.0)["side"] is None
     L.fill(+2, 100.0, tick=5)
     L.fill(+2, 110.0, tick=6)                       # add: entry stays, x-bar moves
-    v = L.view(120.0, bid=119.0, ask=121.0)
+    v = L.view(120.0)
     assert (v["side"], v["size"], v["entry_price"], v["opened_tick"]) == ("long", 4.0, 100.0, 5)
-    assert v["avg_price"] == 105.0 and v["value"] == 4 * 119.0
+    assert v["avg_price"] == 105.0
     L.fill(-1, 120.0, tick=7)                       # reduce: still the same position
     assert L.view(120.0)["entry_price"] == 100.0
     L.fill(-5, 130.0, tick=8)                       # flip: short 2 opened at 130
-    v = L.view(125.0, bid=124.0, ask=126.0)
+    v = L.view(125.0)
     assert (v["side"], v["size"], v["entry_price"], v["opened_tick"]) == ("short", 2.0, 130.0, 8)
     L.fill(+2, 125.0, tick=9)                       # close
     v = L.view(125.0)
@@ -325,3 +329,52 @@ def test_positions_add_up_to_the_account():
     assert abs(lots - v.sim.pnl.total_q(x)) < 1e-6
     total_lots_b = sum(l.b for l in v.sim.lots.values())
     assert abs(total_lots_b - v.sim.pnl.b_tot) < 1e-9          # positions hold exactly the net RCC
+
+
+def test_average_never_carries_realised_pnl():
+    """x̄ = -q/b of the open position only. On the worked example: 170, 173.3,
+    then the sell of 20 closes the long (banked) and opens a short 5 AT 180
+    (the paper's cumulative column would say 200), flat, then 165 for the new
+    long (the paper: 148.3), flat."""
+    L = PaperPnL(B=0.0, Q=0.0)
+    want = [170.0, 173.333, 180.0, None, 165.0, None]
+    for (u, x), w in zip([(+5, 170.0), (+10, 175.0), (-20, 180.0), (+5, 160.0),
+                          (+12, 165.0), (-12, 170.0)], want):
+        L.fill(u, x)
+        got = L.avg_price()
+        assert (got is None and w is None) or abs(got - w) < 1e-3, (u, x, got)
+    assert abs(L.realised - 260.0) < 1e-9                       # all of it banked
+
+
+def test_mark_to_market_at_last_price():
+    """The reported case: n = 2, NNNN, defaults; buy 5 RCC at market at tick 605,
+    read at tick 910. Marked at the last price, not the (thin) best bid."""
+    v = Venue(n=2, arm="NNNN", seed=9, user_eur=50_000, user_rcc=500)
+    v.step(605)
+    v.place("buy", "market", qty=5)
+    v.step(305)
+    x = v.sim.p
+    P, A = v.positions()[0], v.account()["pnl"]
+    xbar = P["avg_price"]
+    assert abs(xbar - 103.182203) < 1e-6 and abs(x - 102.257021) < 1e-6
+    assert v.sim.book.best_bid < x - 1.0                          # the bid that was used before
+    for view in (P, A):
+        assert view["x_prime"] == x
+        assert abs(view["unrealised"] - 5 * (x - xbar)) < 1e-9    # -4.6259 EUR
+    assert abs(A["total_rcc"] - 5 * (1 - xbar / x)) < 1e-12       # Eq. 3: -0.045238 RCC
+    assert abs(A["total"] - A["total_rcc"] * x) < 1e-9            # Eq. 5a: p^q = p^b x
+    assert abs(A["unrealised"] - (-4.6259)) < 5e-5 and abs(A["total_rcc"] - (-0.045238)) < 5e-7
+
+
+def test_n_eff():
+    v = Venue(n=50, arm="NNNN", seed=9)
+    ne = v.market()["n_eff"]
+    assert 0 < ne <= 100 + 1e-9
+    import math
+    rp = math.sqrt(v.sim.p)
+    w = np.array([a.eur / rp + a.btc * rp for a in v.sim.agents]); s = w / w.sum()
+    assert abs(ne - 1 / np.sum(s ** 2)) < 1e-9
+    v2 = Venue(n=50, arm="NNNN", seed=9)
+    for a in v2.sim.agents:                                       # equal wealth -> 2n
+        a.eur, a.btc = 1000.0, 10.0
+    assert abs(v2.market()["n_eff"] - 100) < 1e-9
