@@ -12,10 +12,13 @@
   // ── formatting ────────────────────────────────────────────────────────
   const nf = (d) => new Intl.NumberFormat(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
   const F2 = nf(2), F4 = nf(4), F0 = nf(0);
-  const px = (v) => (v == null || !isFinite(v) ? "—" : F2.format(v));
-  const qty = (v) => (v == null || !isFinite(v) ? "—" : F4.format(v));
-  const eur = (v) => (v == null || !isFinite(v) ? "—" : F2.format(v) + " EUR");
-  const signed = (v, unit = " EUR") => (v == null || !isFinite(v) ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + F2.format(Math.abs(v)) + unit);
+  // money: every EUR amount and price (EUR per RCC) to 4 decimals, every RCC amount to 6
+  const E = nf(4), R = nf(6), EUR_DP = 4, RCC_DP = 6;
+  const px = (v) => (v == null || !isFinite(v) ? "—" : E.format(v));
+  const qty = (v) => (v == null || !isFinite(v) ? "—" : R.format(v));
+  const eur = (v) => (v == null || !isFinite(v) ? "—" : E.format(v) + " EUR");
+  const signed = (v, unit = " EUR") => (v == null || !isFinite(v) ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") +
+    (unit.trim() === "RCC" ? R : E).format(Math.abs(v)) + unit);
   const cls = (v) => (v > 1e-9 ? "up" : v < -1e-9 ? "dn" : "");
   const hms = (ms) => new Date(ms).toLocaleTimeString([], { hour12: false });
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -204,7 +207,7 @@
       rightPriceScale: { borderColor: "#262a31", scaleMargins: { top: 0.08, bottom: 0.24 } },
       // minBarSpacing: zoom out until the whole session fits (default 0.5 px per tick)
       timeScale: { borderColor: "#262a31", tickMarkFormatter: (t) => "t " + F0.format(t), rightOffset: 6, minBarSpacing: 0.001 },
-      localization: { timeFormatter: (t) => "tick " + F0.format(t), priceFormatter: (p) => F2.format(p) },
+      localization: { timeFormatter: (t) => "tick " + F0.format(t), priceFormatter: (p) => E.format(p) },
       crosshair: { mode: 0 },
     });
     series = chart.addLineSeries({ color: "#3773f5", lineWidth: 2, priceLineColor: "#3773f5", lastValueVisible: true });
@@ -304,16 +307,16 @@
     $("#hdr-chg").textContent = (chg >= 0 ? "+" : "−") + F2.format(Math.abs(chg * 100)) + "%";
     $("#hdr-chg").className = chg >= 0 ? "up" : "dn";
     $("#hdr-hl").textContent = `${px(mk.hi)} / ${px(mk.lo)}`;
-    $("#hdr-vol").textContent = F2.format(mk.volume);
+    $("#hdr-vol").textContent = R.format(mk.volume);
     $("#hdr-neff").textContent = `${F0.format(mk.n_eff)} / ${F0.format(mk.population)}`;
     $("#hdr-tick").textContent = F0.format(mk.t);
     $("#bk-last").textContent = px(mk.price);
     $("#bk-last").className = "";
     renderBook(s.book);
 
-    $("#a-eur").textContent = F2.format(a.eur);
-    $("#a-rcc").textContent = F4.format(a.rcc);
-    $("#a-wealth").textContent = F2.format(pnl.wealth);
+    $("#a-eur").textContent = E.format(a.eur);
+    $("#a-rcc").textContent = R.format(a.rcc);
+    $("#a-wealth").textContent = E.format(pnl.wealth);
     setPnl("#a-real", pnl.realised); setPnl("#a-unreal", pnl.unrealised); setPnl("#a-total", pnl.total);
     renderAvail();
     renderOpen(s.open_orders);
@@ -335,14 +338,14 @@
     $("#bids").innerHTML = bids.length ? bids.map(row).join("") : `<div class="bk-empty">no bids</div>`;
     if (b.best_bid != null && b.best_ask != null) {
       const sp = b.best_ask - b.best_bid, mid = (b.best_ask + b.best_bid) / 2;
-      $("#bk-spread").textContent = `Spread ${F4.format(sp)} (${F2.format(sp / mid * 1e4)} bps)`;
+      $("#bk-spread").textContent = `Spread ${E.format(sp)} (${F2.format(sp / mid * 1e4)} bps)`;
     } else $("#bk-spread").textContent = b.best_bid == null && b.best_ask == null ? "Book empty" : (b.best_bid == null ? "No bids" : "No asks");
   }
   // on press, not click: the book is redrawn every tick, so the row under the
   // pointer at release is usually a new element and a click would not fire
   $("#screen-trade").addEventListener("pointerdown", (e) => {
     const r = e.target.closest(".bk-side .bk-row");
-    if (r && e.button === 0) { setKind("limit"); $("#f-price").value = (+r.dataset.p).toFixed(2); updateTotal(); }
+    if (r && e.button === 0) { setKind("limit"); $("#f-price").value = (+r.dataset.p).toFixed(EUR_DP); updateTotal(); }
   });
 
   function renderOpen(list) {
@@ -390,7 +393,7 @@
     for (const p of list) {
       const row = tb.querySelector(`tr[data-id="${p.id}"]`);
       const f = (k, v) => { const el = row.querySelector(`[data-f="${k}"]`); if (el.textContent !== v) el.textContent = v; };
-      f("size", qty(p.size)); f("value", F2.format(p.value)); f("entry", px(p.entry_price));
+      f("size", qty(p.size)); f("value", E.format(p.value)); f("entry", px(p.entry_price));
       f("avg", px(p.avg_price)); f("mark", px(p.x_prime)); f("upnl", signed(p.unrealised));
       f("real", p.realised ? signed(p.realised) : "—"); f("opened", "t " + F0.format(p.opened_tick));
       row.querySelector('[data-f="upnl"]').className = "num " + cls(p.unrealised);
@@ -441,14 +444,14 @@
     $("#t-fills").innerHTML = S.fills.slice(0, 500).map((f) => `<tr>
       <td>${hms(f.wall * 1000)}</td><td class="num">${f.tick}</td>
       <td class="${f.side === "buy" ? "up" : "dn"}">${f.side.toUpperCase()}</td>
-      <td class="num">${px(f.price)}</td><td class="num">${qty(f.size)}</td><td class="num">${F2.format(f.size * f.price)}</td>
+      <td class="num">${px(f.price)}</td><td class="num">${qty(f.size)}</td><td class="num">${E.format(f.size * f.price)}</td>
       <td>${f.role}</td><td class="muted">${esc(f.counterparty)}</td>
       <td class="num ${cls(f.realised)}">${f.realised ? signed(f.realised, "") : "—"}</td></tr>`).join("");
   }
   function renderAssets(a, p) {
     $("#t-assets").innerHTML = `
-      <tr><td><b>EUR</b></td><td class="num">${F2.format(a.eur)}</td><td class="num">${F2.format(a.avail_eur)}</td><td class="num">${F2.format(a.locked_eur)}</td><td class="num">${F2.format(a.Q)}</td><td class="num">${F2.format(a.eur)}</td></tr>
-      <tr><td><b>RCC</b></td><td class="num">${F4.format(a.rcc)}</td><td class="num">${F4.format(a.avail_rcc)}</td><td class="num">${F4.format(a.locked_rcc)}</td><td class="num">${F4.format(a.B)}</td><td class="num">${F2.format(a.rcc * p)}</td></tr>`;
+      <tr><td><b>EUR</b></td><td class="num">${E.format(a.eur)}</td><td class="num">${E.format(a.avail_eur)}</td><td class="num">${E.format(a.locked_eur)}</td><td class="num">${E.format(a.Q)}</td><td class="num">${E.format(a.eur)}</td></tr>
+      <tr><td><b>RCC</b></td><td class="num">${R.format(a.rcc)}</td><td class="num">${R.format(a.avail_rcc)}</td><td class="num">${R.format(a.locked_rcc)}</td><td class="num">${R.format(a.B)}</td><td class="num">${E.format(a.rcc * p)}</td></tr>`;
     const P = a.pnl;
     const cell = (label, val, note, c = "") => `<div><small>${label}</small><b class="${c}">${val}</b><em>${note}</em></div>`;
     $("#pnlgrid").innerHTML = [
@@ -459,7 +462,7 @@
       cell("Mark x", px(P.x_prime), "last price (mark-to-market)"),
       cell("Position b", qty(P.position) + " RCC", "Eq. 1a: net RCC bought"),
       cell("Average price x̄", px(P.avg_price), "Eq. 2: −q/b of the open position"),
-      cell("Wealth W<sup>q</sup>", F2.format(P.wealth) + " EUR", "Eq. 8b: x(B+b) + Q + q"),
+      cell("Wealth W<sup>q</sup>", E.format(P.wealth) + " EUR", "Eq. 8b: x(B+b) + Q + q"),
       cell("Wealth W<sup>b</sup>", qty(P.wealth_rcc) + " RCC", "Eq. 8a: W<sup>q</sup>/x"),
       cell("Performance p̃", (P.perf >= 0 ? "+" : "−") + F4.format(Math.abs(P.perf * 100)) + " %", "Sec. 3: p<sup>b</sup> / (B + Q/x₀)", cls(P.perf)),
       cell("Volume", qty(P.volume) + " RCC", `${P.n_fills} fills · no fees`),
@@ -492,7 +495,7 @@
     const p = S.lastPrice;
     const lo = p * 0.95, hi = p * 1.05;
     const maxQ = Math.max(1e-9, ...all.map((x) => x[1]));
-    const X = (v) => 50 + (W - 70) * (v - lo) / (hi - lo), Y = (q) => H - 28 - (H - 50) * q / maxQ;
+    const X = (v) => 84 + (W - 112) * (v - lo) / (hi - lo), Y = (q) => H - 28 - (H - 50) * q / maxQ;
     const area = (pts, col, fill, dir) => {
       if (!pts.length) return;
       g.beginPath(); g.moveTo(X(pts[0][0]), Y(0));
@@ -505,9 +508,9 @@
     area(d.asks, "#f0616d", "rgba(240,97,109,.18)", +1);
     g.strokeStyle = "#3773f5"; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(X(p), 10); g.lineTo(X(p), H - 28); g.stroke(); g.setLineDash([]);
     g.fillStyle = "#8a919e"; g.font = "11px " + getComputedStyle(document.body).fontFamily;
-    for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4; g.fillText(F2.format(v), X(v) - 16, H - 10); }
-    for (let i = 1; i <= 4; i++) { const q = maxQ * i / 4; g.fillText(F2.format(q), 4, Y(q) + 4); }
-    g.fillText("cumulative RCC within ±5% of last", 56, 18);
+    for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4; g.fillText(E.format(v), X(v) - 22, H - 10); }
+    for (let i = 1; i <= 4; i++) { const q = maxQ * i / 4; g.fillText(R.format(q), 4, Y(q) + 4); }
+    g.fillText("cumulative RCC within ±5% of last", 90, 18);
   }
 
   // ── tabs ─────────────────────────────────────────────────────────────
@@ -597,7 +600,7 @@
   function renderAvail() {
     if (!S.snap) return;
     const a = S.snap.account;
-    $("#f-avail").textContent = S.side === "buy" ? F2.format(a.avail_eur) + " EUR" : F4.format(a.avail_rcc) + " RCC";
+    $("#f-avail").textContent = S.side === "buy" ? E.format(a.avail_eur) + " EUR" : R.format(a.avail_rcc) + " RCC";
   }
   function refPrice() {
     const b = S.snap && S.snap.book;
@@ -610,7 +613,7 @@
     let txt = "—";
     if (q > 0) {
       if (S.unit === "EUR") txt = `≈ ${qty(q / p)} RCC`;
-      else if (p > 0) txt = `${S.kind === "market" ? "≈ " : ""}${F2.format(q * p)} EUR`;
+      else if (p > 0) txt = `${S.kind === "market" ? "≈ " : ""}${E.format(q * p)} EUR`;
     }
     $("#f-total-lbl").textContent = S.kind === "market" ? "Estimated total" : "Total";
     $("#f-total").textContent = txt;
@@ -620,7 +623,7 @@
     const b = S.snap && S.snap.book;
     if (!b) return;
     const v = { bid: b.best_bid, ask: b.best_ask, mid: b.best_bid != null && b.best_ask != null ? (b.best_bid + b.best_ask) / 2 : S.lastPrice }[a.dataset.q] ?? S.lastPrice;
-    $("#f-price").value = v.toFixed(2); updateTotal();
+    $("#f-price").value = v.toFixed(EUR_DP); updateTotal();
   }));
   function setPct(pct) {
     if (!S.snap) return;
@@ -633,12 +636,12 @@
       // take the touch it would trade against (best ask, else the last price)
       if (S.kind === "limit" && !(parseFloat($("#f-price").value) > 0)) {
         const b = S.snap.book, t = (S.side === "buy" ? b.best_ask : b.best_bid) ?? S.lastPrice;
-        $("#f-price").value = t.toFixed(2);
+        $("#f-price").value = t.toFixed(EUR_DP);
       }
       const p = refPrice(); v = p > 0 ? a.avail_eur * f / p : 0;
     }
     // round down so "Max" never asks for more than is there
-    const d = S.unit === "EUR" ? 100 : 1e4;
+    const d = 10 ** (S.unit === "EUR" ? EUR_DP : RCC_DP);
     $("#f-qty").value = (Math.floor(v * d * (1 - 1e-12)) / d).toString();
     $("#f-pct").value = pct; updateTotal();
   }

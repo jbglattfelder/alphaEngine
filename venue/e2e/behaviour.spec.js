@@ -60,9 +60,9 @@ test("PFCF note and arm label", async ({ page }) => {
 test("market opens at x0 = 100, tick 0, with the allocation", async ({ page }) => {
   await openMarket(page);
   expect(await tick(page)).toBe(0);
-  await expect(page.locator("#hdr-last")).toHaveText("100.00");
-  await expect(page.locator("#a-eur")).toHaveText("50,000.00");
-  await expect(page.locator("#a-rcc")).toHaveText("500.0000");
+  await expect(page.locator("#hdr-last")).toHaveText("100.0000");
+  await expect(page.locator("#a-eur")).toHaveText("50,000.0000");
+  await expect(page.locator("#a-rcc")).toHaveText("500.000000");
   await expect(page.locator("#hdr-neff")).toHaveText(/^\d{2,3} \/ 300$/);    // n_eff <= 2n
 });
 
@@ -114,7 +114,7 @@ test("limit order rests, shows as open, cancels; cancel all", async ({ page }) =
   await order(page, { side: "buy", kind: "limit", qty: 5, price: "50.00" });
   await expect(page.locator("#cnt-open")).toHaveText("2");
   await expect(page.locator("#t-open tr")).toHaveCount(2);
-  await expect(page.locator("#f-avail")).toHaveText("49,750.00 EUR");      // 250 EUR locked
+  await expect(page.locator("#f-avail")).toHaveText("49,750.0000 EUR");      // 250 EUR locked
   await page.locator("#t-open [data-cancel]").first().click();
   await sync(page);
   await expect(page.locator("#cnt-open")).toHaveText("1");
@@ -131,10 +131,10 @@ test("market order fills as taker and lands in trade history", async ({ page }) 
   await openMarket(page);
   await step(page, 300);
   await order(page, { side: "sell", kind: "market", qty: 1 });
-  await expect(page.locator(".toast.ok").last()).toContainText("Sell market filled: 1.0000 RCC");
+  await expect(page.locator(".toast.ok").last()).toContainText("Sell market filled: 1.000000 RCC");
   await page.click(".tabs[data-group=bottom] button[data-tab=fills]");
   await expect(page.locator("#t-fills tr").first()).toContainText("taker");
-  await expect(page.locator("#a-rcc")).toHaveText("499.0000");
+  await expect(page.locator("#a-rcc")).toHaveText("499.000000");
 });
 
 test("rejections and form validation", async ({ page }) => {
@@ -355,7 +355,7 @@ test("Positions: every market order opens its own; Close closes only that one", 
   await expect(page.locator(`#t-pos tr[data-id="${P[1].id}"] td`).nth(1)).toHaveText("SHORT");
   await page.click(`#t-pos tr[data-id="${P[1].id}"] [data-pos="close"]`);
   await sync(page);
-  await expect(page.locator(".toast.ok").last()).toContainText("Buy market filled: 10.0000 RCC");
+  await expect(page.locator(".toast.ok").last()).toContainText("Buy market filled: 10.000000 RCC");
   P = await page.evaluate(() => window.__rpm.positions());
   expect(P.map((p) => [p.side, p.size])).toEqual([["long", 4]]);         // the long is untouched
   await expect(page.locator("#cnt-pos")).toHaveText("1");
@@ -455,5 +455,29 @@ test("positions and the account are marked to market at the last price", async (
   expect(P.x_prime).toBeCloseTo(last, 2);
   expect(P.unrealised).toBeCloseTo(5 * (P.x_prime - P.avg_price), 9);
   expect(P.unrealised).toBeCloseTo(-4.6259, 4);                               // the reported case
-  await expect(page.locator('#t-pos [data-f="mark"]')).toHaveText(last.toFixed(2));
+  await expect(page.locator('#t-pos [data-f="mark"]')).toHaveText(last.toFixed(4));
+});
+
+test("money is shown to 4 decimals in EUR and 6 in RCC", async ({ page }) => {
+  await openMarket(page);
+  await step(page, 300);
+  await order(page, { side: "buy", kind: "market", qty: 2 });
+  const eur4 = /^[+−]?[\d,]+\.\d{4}( EUR)?$/, rcc6 = /^[+−]?[\d,]+\.\d{6}( RCC)?$/;
+  for (const sel of ["#hdr-last", "#a-eur", "#a-wealth", "#a-real", "#a-unreal", "#a-total", "#bk-last"])
+    expect(await page.textContent(sel), sel).toMatch(eur4);
+  for (const sel of ["#a-rcc", "#hdr-vol"]) expect(await page.textContent(sel), sel).toMatch(rcc6);
+  for (const t of await page.locator("#asks .bk-row span:first-of-type, #bids .bk-row span:first-of-type").allTextContents())
+    expect(t).toMatch(eur4);
+  for (const t of await page.locator("#asks .bk-row span:nth-of-type(2), #bids .bk-row span:nth-of-type(2)").allTextContents())
+    expect(t).toMatch(rcc6);
+  await page.click(".tabs[data-group=bottom] button[data-tab=pos]");
+  for (const f of ["value", "entry", "avg", "mark", "upnl"])
+    expect(await page.textContent(`#t-pos [data-f="${f}"]`), f).toMatch(eur4);
+  expect(await page.textContent('#t-pos [data-f="size"]')).toMatch(rcc6);
+  await page.click('.kinds button[data-kind="limit"]');                    // the price row lives here
+  await page.click('.quick a[data-q="ask"]');
+  expect(await page.inputValue("#f-price")).toMatch(/^\d+\.\d{4}$/);
+  await page.click("#side-sell");
+  await page.click('.pct-ticks a[data-p="50"]');
+  expect(await page.inputValue("#f-qty")).toMatch(/^\d+(\.\d{1,6})?$/);
 });
