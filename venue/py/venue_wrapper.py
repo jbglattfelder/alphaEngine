@@ -32,7 +32,7 @@ PnL: Glattfelder & Houweling 2024, "Calculating Profits and Losses for
 Algorithmic Trading Strategies: A Short Guide", arXiv:2411.14068 — the
 balance-sheet tally the engine itself uses for its agents (see
 Agent.__doc__): Eq. 1 (b, q), Eq. 2 (average price), Eq. 3/9 (PnL against the no-trading
-benchmark, marked at x' = the opposite side of the book), Eq. 8 (wealth).
+benchmark, marked to market at the last price), Eq. 8 (wealth).
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ for _p in (ROOT, HERE):                                 # (in the browser both s
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import numpy as np  # noqa: E402
 from simulation_mvp import Config, Order, Simulation, Trade  # noqa: E402  (frozen)
 
 USER_ID = "YOU"            # never collides with agent ids "L<i>" / "S<i>"
@@ -78,13 +79,12 @@ class PaperPnL:
     q = -sum x_j u_j (u > 0 bought), at the price x_j each fill traded at.
     Average price x̄ = -q/b (Eq. 2).
 
-    x' is "the opposite of the bid/ask pair": the side of the book an open
-    position would be closed against, i.e. the best BID for a long (b > 0) and
-    the best ASK for a short (b < 0). With the position flat (b = 0), the paper's
-    worked example converts the banked quote profit at the ask when q > 0 and at
-    the bid when q < 0 (Eq. 3's closing case; the example's 260/170.25 =
-    1.527165 SOL and its Eq. 8 wealth rows). An empty side falls back to the
-    last price, the engine's own definition of "the price".
+    Marked to market at the last traded price x (the engine's own definition
+    of "the price"): the paper's single-price form, x' = x. The paper's bid/ask
+    variant (x' = the opposite side of the book) is not used for marking: in a
+    thin book it values a position at a quote far from the market and reports
+    the spread as PnL. The formulas take x' as an argument, so the worked
+    example's bid/ask rows are still tested.
 
         p^q = x' b + q                      Eq. 9b  (EUR)
         p^b = b + q / x'                    Eq. 9a  (RCC; = Eq. 3)
@@ -151,19 +151,11 @@ class PaperPnL:
                 self.b, self.q = 0.0, 0.0
         return banked
 
-    # ── the paper's prices ──────────────────────────────────────────────────
-    def x_prime(self, last: float, bid: Optional[float], ask: Optional[float]) -> float:
-        """x': bid for a long, ask for a short; flat: ask if q > 0, bid if q < 0."""
-        if self.b > 0:
-            side = bid
-        elif self.b < 0:
-            side = ask
-        else:
-            side = ask if self.q_tot > 0 else bid
-        return side if (side is not None and side > 0) else last
-
     def avg_price(self) -> Optional[float]:
-        """Eq. 2, x̄ = -q/b of the open position (None when flat)."""
+        """Eq. 2, x̄ = -q/b of the OPEN position: its tally restarts at every
+        return to b = 0 (and at a flip through zero), so the average never
+        carries realised PnL. (The paper's cumulative x̄ would: 148.3 instead of
+        165 after the worked example's 5th trade.) None when flat."""
         if self.b == 0.0:
             return None
         return -self.q / self.b
@@ -183,9 +175,8 @@ class PaperPnL:
         """Eq. 8b, W^q in EUR, at x'."""
         return xp * (self.B + self.b_tot) + self.Q + self.q_tot
 
-    def view(self, last: float, bid: Optional[float] = None,
-             ask: Optional[float] = None) -> dict:
-        xp = self.x_prime(last, bid, ask)
+    def view(self, last: float) -> dict:
+        xp = last                                          # mark-to-market: x' = x
         pb = self.total_b(xp)
         w0b = self.B + self.Q / X0
         side = "long" if self.b > 0 else "short" if self.b < 0 else None
@@ -251,11 +242,9 @@ class Lot:
     def open(self) -> bool:
         return self.b != 0.0
 
-    def view(self, last: float, bid: Optional[float], ask: Optional[float]) -> dict:
+    def view(self, last: float) -> dict:
         side = "long" if self.b > 0 else "short"
-        mark = bid if self.b > 0 else ask                 # where it would close (x')
-        if mark is None or mark <= 0:
-            mark = last
+        mark = last                                        # mark-to-market at the last price
         return dict(id=self.id, order=self.order, side=side, size=abs(self.b),
                     value=abs(self.b) * mark, entry_price=self.entry,
                     avg_price=-self.q / self.b, x_prime=mark,
@@ -792,7 +781,7 @@ class Venue:
         ae, ar = sim.available()
         return dict(eur=sim.user.eur, rcc=sim.user.btc, locked_eur=le, locked_rcc=lr,
                     avail_eur=ae, avail_rcc=ar, B=sim.pnl.B, Q=sim.pnl.Q,
-                    pnl=sim.pnl.view(sim.p, sim.book.best_bid, sim.book.best_ask))
+                    pnl=sim.pnl.view(sim.p))
 
     def open_orders(self) -> list[dict]:
         return [uo.view() for uo in self.sim.user_orders.values() if uo.resting is not None]
@@ -802,13 +791,25 @@ class Venue:
         alive = sum(1 for a in sim.agents if a.alive)
         bb, ba = sim.book.best_bid, sim.book.best_ask
         return dict(t=self.t, price=sim.p, x0=X0, alive=alive, population=2 * self.cfg.n,
+                    n_eff=self.n_eff(),
                     arm=self.arm, stopped=sim.stopped_reason, volume=sim.volume,
                     hi=sim.hi, lo=sim.lo, best_bid=bb, best_ask=ba)
 
+    def n_eff(self) -> float:
+        """Effective population 1/sum(w_i^2), w_i = agent i's share of the
+        crowd's wealth in X units (eur/sqrt(p) + rcc*sqrt(p)), as in
+        helper/neff_driver.py of the development repository. Equal wealth
+        gives 2n; concentration pulls it down. The human is not counted."""
+        rp = math.sqrt(self.sim.p)
+        w = np.fromiter((a.eur / rp + a.btc * rp for a in self.sim.agents), float,
+                        count=len(self.sim.agents))
+        w = np.maximum(w, 0.0)
+        tot = w.sum()
+        return float(1.0 / np.sum((w / tot) ** 2)) if tot > 0 else 0.0
+
     def positions(self) -> list[dict]:
         """Open positions, oldest first, each marked at where it would close."""
-        b = self.sim.book
-        return [lot.view(self.sim.p, b.best_bid, b.best_ask)
+        return [lot.view(self.sim.p)
                 for lot in sorted(self.sim.lots.values(), key=lambda l: l.id)]
 
     def snapshot(self, levels: int = 18, group: float = 0.0) -> dict:
