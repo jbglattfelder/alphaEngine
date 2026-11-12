@@ -193,6 +193,10 @@ td.acts { display: flex; gap: 6px; }
 .pnlgrid small { display: block; color: var(--muted); font-size: 11px; }
 .pnlgrid b { font-family: var(--mono); font-weight: 500; font-size: 14px; }
 .pnlgrid em { display: block; color: var(--muted); font-style: normal; font-size: 10px; margin-top: 2px; }
+.pnlgrid .ref em { font-size: 12px; margin-top: 4px; }
+.pnlgrid a, .card .intro a { color: var(--accent); text-decoration: none; }
+.pnlgrid a:hover, .card .intro a:hover { text-decoration: underline; }
+.card .intro { line-height: 1.6; }
 
 /* ── toasts, banner ───────────────────────────────────── */
 #toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; max-width: calc(100vw - 32px); }

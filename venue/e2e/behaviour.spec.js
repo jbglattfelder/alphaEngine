@@ -481,3 +481,19 @@ test("money is shown to 4 decimals in EUR and 6 in RCC", async ({ page }) => {
   await page.click('.pct-ticks a[data-p="50"]');
   expect(await page.inputValue("#f-qty")).toMatch(/^\d+(\.\d{1,6})?$/);
 });
+
+test("config page intro and the PnL panel's article link", async ({ page }) => {
+  await signIn(page);
+  const intro = page.locator("#screen-config .intro");
+  await expect(intro).toContainText("This is a simulated trading terminal with a fictitious currency pair.");
+  await expect(intro).toContainText("Everyone in the market is a zero-intelligence agent.");
+  const here = intro.locator("a", { hasText: "here" });
+  await expect(here).toHaveAttribute("href", "https://github.com/jbglattfelder/alphaEngine/blob/main/pub/liquidityEngine-short.pdf");
+  await expect(here).toHaveAttribute("target", "_blank");
+  await launch(page);
+  await page.click(".tabs[data-group=bottom] button[data-tab=assets]");
+  const ref = page.locator("#pnlgrid .ref");
+  await expect(ref).toContainText("Calculations based on this article");
+  await expect(ref.locator("a")).toHaveAttribute("href", "https://arxiv.org/pdf/2411.14068");
+  await expect(ref.locator("a")).toHaveAttribute("target", "_blank");
+});

@@ -466,6 +466,7 @@
       cell("Wealth W<sup>b</sup>", qty(P.wealth_rcc) + " RCC", "Eq. 8a: W<sup>q</sup>/x"),
       cell("Performance p̃", (P.perf >= 0 ? "+" : "−") + F4.format(Math.abs(P.perf * 100)) + " %", "Sec. 3: p<sup>b</sup> / (B + Q/x₀)", cls(P.perf)),
       cell("Volume", qty(P.volume) + " RCC", `${P.n_fills} fills · no fees`),
+      `<div class="ref"><small>Method</small><em>Calculations based on <a href="https://arxiv.org/pdf/2411.14068" target="_blank" rel="noopener noreferrer">this article</a></em></div>`,
     ].join("");
   }
 
