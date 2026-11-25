@@ -1,8 +1,13 @@
 name: venue
 
 on:
+  # A push or PR that only touches pub/ (the paper PDFs) runs nothing: the
+  # site does not contain pub/ (the venue links the PDF on GitHub), so there
+  # is nothing to test or redeploy.
   push:
+    paths-ignore: ["pub/**"]
   pull_request:
+    paths-ignore: ["pub/**"]
   workflow_dispatch:
 
 permissions:
